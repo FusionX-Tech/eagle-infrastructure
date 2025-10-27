@@ -1,25 +1,25 @@
 name: fusionx-eagle-infra
 
+# Eagle Infrastructure Stack
+# Apenas serviços de infraestrutura pura - sem backend ou frontend
+#
 # Profiles:
-# - infra: Core infrastructure (Keycloak, Kong, Vault, postgres-infra, redis)
-# - backend: Microservices + postgres-eagle + LocalStack (depends on infra)
-# - frontend: Frontend application (depends on infra + backend)
+# - infra: Core infrastructure (Keycloak, Kong, Vault, PostgreSQL, Redis)
 # - monitoring: Prometheus, Grafana, Jaeger
 # - tools: Development tools (PgAdmin)
 # - replicas: Database and Redis replicas for HA
-# - full: Production-like environment (infra + backend + frontend + monitoring + replicas)
 #
 # Usage Examples:
 # docker-compose --profile infra up -d                    # Only infrastructure
-# docker-compose --profile backend up -d                  # Backend (auto includes infra)
-# docker-compose --profile full up -d                     # Production-like environment
+# docker-compose --profile monitoring up -d               # Only monitoring
+# docker-compose --profile infra --profile monitoring up -d # Infra + Monitoring
 
 services:
   # 🟢 POSTGRES INFRA (Infrastructure Services - Keycloak, Kong, etc.)
   postgres:
     image: postgres:16-alpine
     container_name: fx-postgres-infra
-    profiles: ["infra", "full"]
+    profiles: ["infra"]
     restart: unless-stopped
     env_file: .env
     ports:
@@ -55,7 +55,7 @@ services:
   postgres-replica-1:
     image: postgres:16-alpine
     container_name: fx-postgres-replica-1
-    profiles: ["infra", "replicas", "full"]
+    profiles: ["replicas"]
     restart: unless-stopped
     env_file: .env
     ports:
@@ -90,7 +90,7 @@ services:
   postgres-replica-2:
     image: postgres:16-alpine
     container_name: fx-postgres-replica-2
-    profiles: ["infra", "replicas", "full"]
+    profiles: ["replicas"]
     restart: unless-stopped
     env_file: .env
     ports:
@@ -125,7 +125,7 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:${KEYCLOAK_VERSION}
     container_name: fx-keycloak
-    profiles: ["infra", "full"]
+    profiles: ["infra"]
     restart: unless-stopped
     depends_on:
       postgres: { condition: service_healthy }
@@ -149,7 +149,7 @@ services:
       - ./keycloak/import:/opt/keycloak/data/import
     labels:
       - "traefik.enable=false"
-      - "description=Keycloak Identity Provider - Solo-Full Architecture"
+      - "description=Keycloak Identity Provider - Infrastructure Stack"
     healthcheck:
       test:
         ["CMD-SHELL", "timeout 5 bash -c '</dev/tcp/localhost/8080' || exit 1"]
@@ -176,7 +176,7 @@ services:
   localstack:
     image: localstack/localstack:latest
     container_name: fx-localstack
-    profiles: ["infra", "backend", "tools", "full"]
+    profiles: ["infra"]
     restart: unless-stopped
     ports: ["4566:4566"]
     environment:
@@ -198,7 +198,7 @@ services:
   vault:
     image: hashicorp/vault:1.15
     container_name: fx-vault
-    profiles: ["infra", "full"]
+    profiles: ["infra"]
     restart: unless-stopped
     ports: ["8200:8200"]
     cap_add: [IPC_LOCK]
@@ -237,7 +237,7 @@ services:
   redis-master:
     image: redis:7-alpine
     container_name: fx-redis-master
-    profiles: ["infra", "full"]
+    profiles: ["infra"]
     restart: unless-stopped
     ports: ["6379:6379"]
     command: >
@@ -260,7 +260,7 @@ services:
   redis-replica:
     image: redis:7-alpine
     container_name: fx-redis-replica
-    profiles: ["infra", "replicas", "full"]
+    profiles: ["replicas"]
     restart: unless-stopped
     ports: ["6380:6379"]
     command: >
@@ -287,7 +287,7 @@ services:
   kong:
     image: kong:3.8
     container_name: fx-kong-gateway
-    profiles: ["infra", "full"]
+    profiles: ["infra"]
     restart: unless-stopped
     environment:
       KONG_DATABASE: "off"
@@ -328,7 +328,7 @@ services:
   kong-database:
     image: postgres:16-alpine
     container_name: fx-kong-db
-    profiles: ["infra", "kong-db", "full"]
+    profiles: ["kong-db"]
     restart: unless-stopped
     environment:
       POSTGRES_USER: kong
@@ -343,290 +343,11 @@ services:
       timeout: 5s
       retries: 5
 
-  # � POSTGREES EAGLE (Eagle Application Database)
-  postgres-eagle:
-    image: postgres:16-alpine
-    container_name: fx-postgres-eagle
-    profiles: ["backend", "full"]
-    restart: unless-stopped
-    env_file: .env
-    ports:
-      - "5435:5432"
-    environment:
-      TZ: America/Sao_Paulo
-      POSTGRES_DB: postgres
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    volumes:
-      - pgdata-eagle:/var/lib/postgresql/data
-      - ./database/initdb:/docker-entrypoint-initdb.d:ro
-    networks: [fusionx-net]
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 20
-
-  # 🔵 MICRO SERVIÇOS
-  ms-customer:
-    build:
-      context: ./services
-      dockerfile: ms-customer/Dockerfile
-    container_name: fx-ms-customer
-    profiles: ["backend", "full"]
-    restart: unless-stopped
-    env_file: ./services/ms-customer/.env
-    ports: ["8085:8085"]
-    depends_on:
-      keycloak: { condition: service_healthy }
-      postgres-eagle: { condition: service_healthy }
-      localstack: { condition: service_healthy }
-      redis-master: { condition: service_healthy }
-    networks: [fusionx-net]
-    labels:
-      # Istio Service Mesh labels
-      - "app=ms-customer"
-      - "version=v1"
-      - "service=ms-customer"
-      # Prometheus monitoring
-      - "prometheus.io/scrape=true"
-      - "prometheus.io/port=8085"
-      - "prometheus.io/path=/actuator/prometheus"
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl -sf http://localhost:8085/actuator/health | grep UP || exit 1",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-
-  ms-alert:
-    build:
-      context: ./services
-      dockerfile: ms-alert/Dockerfile
-    container_name: fx-ms-alert
-    profiles: ["backend", "full"]
-    restart: unless-stopped
-    env_file: ./services/ms-alert/.env
-    ports: ["8083:8083"]
-    depends_on:
-      keycloak: { condition: service_healthy }
-      postgres-eagle: { condition: service_healthy }
-      localstack: { condition: service_healthy }
-      redis-master: { condition: service_healthy }
-      ms-customer: { condition: service_healthy }
-    networks: [fusionx-net]
-    labels:
-      # Istio Service Mesh labels
-      - "app=ms-alert"
-      - "version=v1"
-      - "service=ms-alert"
-      # Prometheus monitoring
-      - "prometheus.io/scrape=true"
-      - "prometheus.io/port=8083"
-      - "prometheus.io/path=/actuator/prometheus"
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl -sf http://localhost:8083/actuator/health | grep UP || exit 1",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-
-  ms-transaction:
-    build:
-      context: ./services
-      dockerfile: ms-transaction/Dockerfile
-    container_name: fx-ms-transaction
-    profiles: ["backend", "full"]
-    restart: unless-stopped
-    env_file: ./services/ms-transaction/.env
-    ports: ["8086:8086"]
-    depends_on:
-      keycloak: { condition: service_healthy }
-      postgres-eagle: { condition: service_healthy }
-      localstack: { condition: service_healthy }
-      redis-master: { condition: service_healthy }
-    networks: [fusionx-net]
-    labels:
-      # Istio Service Mesh labels
-      - "app=ms-transaction"
-      - "version=v1"
-      - "service=ms-transaction"
-      # Prometheus monitoring
-      - "prometheus.io/scrape=true"
-      - "prometheus.io/port=8086"
-      - "prometheus.io/path=/actuator/prometheus"
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl -sf http://localhost:8086/actuator/health | grep UP || exit 1",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-
-  ms-enrichment:
-    build:
-      context: ./services
-      dockerfile: ms-enrichment/Dockerfile
-    container_name: fx-ms-enrichment
-    profiles: ["backend", "full"]
-    restart: unless-stopped
-    env_file: ./services/ms-enrichment/.env
-    ports: ["8082:8082"]
-    depends_on:
-      keycloak: { condition: service_healthy }
-      postgres-eagle: { condition: service_healthy }
-      localstack: { condition: service_healthy }
-      redis-master: { condition: service_healthy }
-      ms-customer: { condition: service_healthy }
-      ms-alert: { condition: service_healthy }
-      ms-transaction: { condition: service_healthy }
-      ms-api: { condition: service_healthy }
-    networks: [fusionx-net]
-    labels:
-      # Istio Service Mesh labels
-      - "app=ms-enrichment"
-      - "version=v1"
-      - "service=ms-enrichment"
-      # Prometheus monitoring
-      - "prometheus.io/scrape=true"
-      - "prometheus.io/port=8082"
-      - "prometheus.io/path=/actuator/prometheus"
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl -sf http://localhost:8082/actuator/health | grep UP || exit 1",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-
-  ms-api:
-    build:
-      context: ./services
-      dockerfile: ms-api/Dockerfile
-    container_name: fx-ms-api
-    profiles: ["backend", "full"]
-    restart: unless-stopped
-    env_file: ./services/ms-api/.env
-    ports: ["8087:8087"]
-    depends_on:
-      keycloak: { condition: service_healthy }
-      postgres-eagle: { condition: service_healthy }
-      localstack: { condition: service_healthy }
-      redis-master: { condition: service_healthy }
-    networks: [fusionx-net]
-    labels:
-      # Istio Service Mesh labels
-      - "app=ms-api"
-      - "version=v1"
-      - "service=ms-api"
-      # Prometheus monitoring
-      - "prometheus.io/scrape=true"
-      - "prometheus.io/port=8087"
-      - "prometheus.io/path=/actuator/prometheus"
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl -sf http://localhost:8087/actuator/health | grep UP || exit 1",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-
-  ms-orchestrator:
-    build:
-      context: ./services
-      dockerfile: ms-orchestrator/Dockerfile
-    container_name: fx-ms-orchestrator
-    profiles: ["backend", "full"]
-    restart: unless-stopped
-    env_file: ./services/ms-orchestrator/.env
-    ports: ["8088:8088"]
-    depends_on:
-      keycloak: { condition: service_healthy }
-      postgres-eagle: { condition: service_healthy }
-      localstack: { condition: service_healthy }
-      redis-master: { condition: service_healthy }
-      ms-customer: { condition: service_healthy }
-      ms-alert: { condition: service_healthy }
-      ms-api: { condition: service_healthy }
-    networks: [fusionx-net]
-    labels:
-      # Istio Service Mesh labels
-      - "app=ms-orchestrator"
-      - "version=v1"
-      - "service=ms-orchestrator"
-      # Prometheus monitoring
-      - "prometheus.io/scrape=true"
-      - "prometheus.io/port=8088"
-      - "prometheus.io/path=/actuator/prometheus"
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl -sf http://localhost:8088/actuator/health | grep UP || exit 1",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-
-  # 🌐 FRONTEND
-  eagle-frontend:
-    profiles: ["frontend", "full"]
-    build:
-      context: ../eagle-frontend
-      dockerfile: Dockerfile
-      args:
-        VITE_ENVIRONMENT: development
-        VITE_KEYCLOAK_SERVER_URL: http://localhost:8081
-        VITE_KEYCLOAK_REALM: eagle
-        VITE_KEYCLOAK_CLIENT_ID: eagle-frontend
-        VITE_KEYCLOAK_REDIRECT_URI: http://localhost:3001/
-        VITE_API_BASE_URL: http://localhost:8088/api
-        VITE_ORCHESTRATOR_SERVICE_URL: http://localhost:8088
-        VITE_APP_VERSION: 1.0.0
-    container_name: eagle-frontend-web
-    restart: unless-stopped
-    ports: ["3001:80"]
-    depends_on:
-      keycloak: { condition: service_healthy }
-      ms-orchestrator: { condition: service_healthy }
-      kong: { condition: service_healthy }
-    networks: [fusionx-net]
-    labels:
-      # Service identification
-      - "app=eagle-frontend"
-      - "version=v1"
-      - "service=eagle-frontend"
-      # Nginx monitoring
-      - "prometheus.io/scrape=true"
-      - "prometheus.io/port=80"
-      - "prometheus.io/path=/metrics"
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:80/ || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-    environment:
-      - NGINX_ENVSUBST_OUTPUT_DIR=/etc/nginx/conf.d
-      - NGINX_ENVSUBST_TEMPLATE_DIR=/etc/nginx/templates
-      - NGINX_ENVSUBST_TEMPLATE_SUFFIX=.template
-
   # 📊 MONITORING STACK
   prometheus:
     image: prom/prometheus:v2.47.0
     container_name: fx-prometheus
-    profiles: ["monitoring", "full"]
+    profiles: ["monitoring"]
     restart: unless-stopped
     ports: ["9090:9090"]
     command:
@@ -655,7 +376,7 @@ services:
   grafana:
     image: grafana/grafana:10.2.0
     container_name: fx-grafana
-    profiles: ["monitoring", "full"]
+    profiles: ["monitoring"]
     restart: unless-stopped
     ports: ["3000:3000"]
     environment:
@@ -684,7 +405,7 @@ services:
   jaeger:
     image: jaegertracing/all-in-one:1.50
     container_name: fx-jaeger
-    profiles: ["monitoring", "full"]
+    profiles: ["monitoring"]
     restart: unless-stopped
     ports:
       - "16686:16686" # Jaeger UI
@@ -715,7 +436,6 @@ networks:
 
 volumes:
   pgdata-infra:
-  pgdata-eagle:
   pgdata-replica-1:
   pgdata-replica-2:
   pgadmin:

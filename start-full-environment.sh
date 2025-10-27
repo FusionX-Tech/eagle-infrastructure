@@ -80,6 +80,7 @@ echo -e "  🔍 Jaeger:       http://localhost:16686"
 
 echo -e "\n${YELLOW}📝 Próximos passos:${NC}"
 echo -e "  1. Configurar Keycloak: cd keycloak && ./scripts/setup-keycloak.ps1"
-echo -e "  2. Iniciar aplicações: cd ../eagle-backend && docker-compose up -d"
+echo -e "  2. Iniciar backend: cd ../eagle-backend && docker-compose up -d"
+echo -e "  3. Iniciar frontend: cd ../eagle-frontend && docker-compose up -d"
 
 echo -e "\n${GREEN}🎉 Eagle Infrastructure está pronta!${NC}"

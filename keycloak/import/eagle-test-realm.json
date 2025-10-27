@@ -1,0 +1,132 @@
+{
+  "realm": "eagle-test",
+  "enabled": true,
+  "displayName": "Eagle Test Realm",
+  "displayNameHtml": "<div class=\"kc-logo-text\"><span>Eagle Test</span></div>",
+  
+  "accessTokenLifespan": 600,
+  "accessTokenLifespanForImplicitFlow": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "refreshTokenMaxReuse": 0,
+  "revokeRefreshToken": true,
+  
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "verifyEmail": false,
+  
+  "bruteForceProtected": false,
+  "defaultSignatureAlgorithm": "RS256",
+  
+  "eventsEnabled": true,
+  "eventsListeners": ["jboss-logging"],
+  "enabledEventTypes": [
+    "LOGIN", "LOGIN_ERROR", "LOGOUT", "LOGOUT_ERROR",
+    "CLIENT_LOGIN", "CLIENT_LOGIN_ERROR"
+  ],
+  "adminEventsEnabled": true,
+  "adminEventsDetailsEnabled": true,
+  
+  "roles": {
+    "realm": [
+      {
+        "name": "MICROSERVICE_ROLE",
+        "description": "Role for microservice communication"
+      },
+      {
+        "name": "CUSTOMER_READ",
+        "description": "Read access to customer data"
+      },
+      {
+        "name": "CUSTOMER_WRITE", 
+        "description": "Write access to customer data"
+      },
+      {
+        "name": "ADMIN",
+        "description": "Administrator role for tests"
+      }
+    ]
+  },
+  
+  "clients": [
+    {
+      "clientId": "ms-customer-test",
+      "name": "Customer Microservice Test Client",
+      "description": "Test client for customer microservice",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "test-secret",
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "protocol": "openid-connect",
+      "attributes": {
+        "access.token.lifespan": "600"
+      },
+      "defaultClientScopes": ["web-origins", "role_list", "profile", "roles", "email"],
+      "optionalClientScopes": ["address", "phone", "offline_access", "microprofile-jwt"]
+    },
+    {
+      "clientId": "ms-customers-api",
+      "name": "Customers Microservice API",
+      "description": "Microservice for customer management", 
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "ms-customers-api-secret",
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "protocol": "openid-connect",
+      "attributes": {
+        "access.token.lifespan": "600"
+      },
+      "defaultClientScopes": ["web-origins", "role_list", "profile", "roles", "email"],
+      "optionalClientScopes": ["address", "phone", "offline_access", "microprofile-jwt"]
+    }
+  ],
+  
+  "users": [
+    {
+      "username": "test-user",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Test",
+      "lastName": "User",
+      "email": "test@eagle.local",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["CUSTOMER_READ", "CUSTOMER_WRITE"]
+    },
+    {
+      "username": "admin-test",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Admin",
+      "lastName": "Test",
+      "email": "admin-test@eagle.local",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["ADMIN", "MICROSERVICE_ROLE", "CUSTOMER_READ", "CUSTOMER_WRITE"]
+    }
+  ]
+}
