@@ -1,0 +1,66 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: eagle-services
+  labels:
+    name: eagle-services
+    istio-injection: enabled
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+  annotations:
+    description: "Namespace para microserviços do sistema de criação de alertas"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ms-orchestrator
+  namespace: eagle-services
+  labels:
+    app: ms-orchestrator
+    version: v1
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ms-alert
+  namespace: eagle-services
+  labels:
+    app: ms-alert
+    version: v1
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ms-customer
+  namespace: eagle-services
+  labels:
+    app: ms-customer
+    version: v1
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ms-transaction
+  namespace: eagle-services
+  labels:
+    app: ms-transaction
+    version: v1
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ms-api
+  namespace: eagle-services
+  labels:
+    app: ms-api
+    version: v1
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ms-enrichment
+  namespace: eagle-services
+  labels:
+    app: ms-enrichment
+    version: v1

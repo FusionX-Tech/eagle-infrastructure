@@ -1,0 +1,144 @@
+# Configuração de Distributed Tracing para Spring Boot
+# Este arquivo deve ser incluído nos application.yml dos microserviços
+
+management:
+  # Actuator endpoints para monitoramento
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,httptrace,loggers,env,configprops,beans,mappings,scheduledtasks,threaddump,heapdump
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+  
+  # Métricas customizadas
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+        step: 15s
+        descriptions: true
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        http.client.requests: true
+      percentiles:
+        http.server.requests: 0.5, 0.95, 0.99
+        http.client.requests: 0.5, 0.95, 0.99
+      slo:
+        http.server.requests: 10ms, 50ms, 100ms, 200ms, 500ms, 1s, 2s, 5s
+        http.client.requests: 10ms, 50ms, 100ms, 200ms, 500ms, 1s, 2s, 5s
+    tags:
+      application: ${spring.application.name}
+      environment: ${ENVIRONMENT:development}
+      version: ${APPLICATION_VERSION:1.0.0}
+      region: ${AWS_REGION:us-east-1}
+
+  # Distributed Tracing
+  tracing:
+    sampling:
+      probability: 1.0  # 100% para desenvolvimento, 0.1 para produção
+    zipkin:
+      endpoint: ${JAEGER_ENDPOINT:http://jaeger:9411/api/v2/spans}
+    baggage:
+      correlation:
+        enabled: true
+        fields: 
+          - customer-document
+          - alert-id
+          - process-id
+          - correlation-id
+          - user-id
+          - session-id
+      remote-fields:
+        - customer-document
+        - alert-id
+        - process-id
+        - correlation-id
+
+# Logging configuration para tracing
+logging:
+  pattern:
+    level: "%5p [${spring.application.name:},%X{traceId:-},%X{spanId:-}]"
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} ${LOG_LEVEL_PATTERN:-%5p} [${spring.application.name:},%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} ${LOG_LEVEL_PATTERN:-%5p} [${spring.application.name:},%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+  level:
+    io.micrometer.tracing: DEBUG
+    org.springframework.cloud.sleuth: DEBUG
+    zipkin2: WARN
+    brave: WARN
+
+# Spring Cloud Gateway (se aplicável)
+spring:
+  cloud:
+    gateway:
+      # Filtros globais para tracing
+      default-filters:
+        - name: RequestRateLimiter
+          args:
+            redis-rate-limiter.replenish-rate: 100
+            redis-rate-limiter.burst-capacity: 200
+        - name: CircuitBreaker
+          args:
+            name: defaultCircuitBreaker
+            fallback-uri: forward:/fallback
+      # Métricas do Gateway
+      metrics:
+        enabled: true
+        tags:
+          path: true
+
+# Configuração de observabilidade customizada
+eagle:
+  observability:
+    # Métricas de negócio
+    business-metrics:
+      enabled: true
+      alert-creation:
+        enabled: true
+        timer-name: "alert.creation.duration"
+        counter-name: "alert.creation.total"
+      alert-enrichment:
+        enabled: true
+        timer-name: "alert.enrichment.duration"
+        counter-name: "alert.enrichment.total"
+      sqs-processing:
+        enabled: true
+        timer-name: "sqs.message.processing.duration"
+        counter-name: "sqs.message.processing.total"
+    
+    # Tracing customizado
+    tracing:
+      enabled: true
+      # Tags customizadas para spans
+      custom-tags:
+        - customer-document
+        - alert-id
+        - process-id
+        - operation-type
+        - business-domain
+      # Anotações automáticas
+      auto-annotations:
+        - "@Service"
+        - "@Repository"
+        - "@Component"
+        - "@RestController"
+      # Exclusões de tracing
+      exclude-patterns:
+        - "/actuator/**"
+        - "/health/**"
+        - "/metrics/**"
+    
+    # Alertas customizados
+    alerts:
+      enabled: true
+      thresholds:
+        error-rate: 0.05  # 5%
+        latency-p95: 1000  # 1 segundo
+        memory-usage: 0.85  # 85%
+        cpu-usage: 0.80    # 80%

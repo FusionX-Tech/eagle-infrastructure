@@ -1,0 +1,281 @@
+# Kong Declarative Configuration - Eagle Solo-Full Architecture
+_format_version: "3.0"
+_transform: true
+
+# JWT Consumers for Keycloak Integration
+consumers:
+  - username: eagle-frontend
+    tags: ["spa", "frontend"]
+  - username: ms-cases-api
+    tags: ["microservice", "service-account"]
+  - username: ms-alerts-api
+    tags: ["microservice", "service-account"]
+  - username: ms-reports-api
+    tags: ["microservice", "service-account"]
+  - username: ms-customers-api
+    tags: ["microservice", "service-account"]
+
+# JWT Credentials for Keycloak RS256 validation
+jwt_secrets:
+  - consumer: eagle-frontend
+    key: "eagle-frontend-key"
+    algorithm: RS256
+    rsa_public_key: |
+      -----BEGIN PUBLIC KEY-----
+      MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAnA/IT4oIAEwYbeCtVYd2
+      iuy4JRxgti27r3sRzXcmABv3xhii350JZeCxSc5Efw1cblJq9vuc5jNIKj/9o/T2
+      Xj5CfKWLfzVNgI1E6kfzE3qDsYYMbq10vMiXezs6LXWmRbEB+qYzqDATCv9OUKbA
+      gTD/D+2NqjXUWLpK6EoeuJ4oqTjqVCaFtzqj1Ysqh36iT4Z9ehxVJKhiqA9exSDv
+      mMFPZ8XKwNrcmqH/SMdf4nPP2DVJoxLT+HGVASnDUz/8WNtfHODW9N5koOEcVy5K
+      sU/aAYgt2heG2cr0jVIu3UH66dQyfsalNimlfdh0LwQD0bpF1J4kaj6jjUtz2hz5
+      ZwIDAQAB
+      -----END PUBLIC KEY-----
+  - consumer: ms-cases-api
+    key: "ms-cases-api-key"
+    algorithm: RS256
+    rsa_public_key: |
+      -----BEGIN PUBLIC KEY-----
+      MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAnA/IT4oIAEwYbeCtVYd2
+      iuy4JRxgti27r3sRzXcmABv3xhii350JZeCxSc5Efw1cblJq9vuc5jNIKj/9o/T2
+      Xj5CfKWLfzVNgI1E6kfzE3qDsYYMbq10vMiXezs6LXWmRbEB+qYzqDATCv9OUKbA
+      gTD/D+2NqjXUWLpK6EoeuJ4oqTjqVCaFtzqj1Ysqh36iT4Z9ehxVJKhiqA9exSDv
+      mMFPZ8XKwNrcmqH/SMdf4nPP2DVJoxLT+HGVASnDUz/8WNtfHODW9N5koOEcVy5K
+      sU/aAYgt2heG2cr0jVIu3UH66dQyfsalNimlfdh0LwQD0bpF1J4kaj6jjUtz2hz5
+      ZwIDAQAB
+      -----END PUBLIC KEY-----
+  - consumer: ms-alerts-api
+    key: "ms-alerts-api-key"
+    algorithm: RS256
+    rsa_public_key: |
+      -----BEGIN PUBLIC KEY-----
+      MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAnA/IT4oIAEwYbeCtVYd2
+      iuy4JRxgti27r3sRzXcmABv3xhii350JZeCxSc5Efw1cblJq9vuc5jNIKj/9o/T2
+      Xj5CfKWLfzVNgI1E6kfzE3qDsYYMbq10vMiXezs6LXWmRbEB+qYzqDATCv9OUKbA
+      gTD/D+2NqjXUWLpK6EoeuJ4oqTjqVCaFtzqj1Ysqh36iT4Z9ehxVJKhiqA9exSDv
+      mMFPZ8XKwNrcmqH/SMdf4nPP2DVJoxLT+HGVASnDUz/8WNtfHODW9N5koOEcVy5K
+      sU/aAYgt2heG2cr0jVIu3UH66dQyfsalNimlfdh0LwQD0bpF1J4kaj6jjUtz2hz5
+      ZwIDAQAB
+      -----END PUBLIC KEY-----
+  - consumer: ms-reports-api
+    key: "ms-reports-api-key"
+    algorithm: RS256
+    rsa_public_key: |
+      -----BEGIN PUBLIC KEY-----
+      MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAnA/IT4oIAEwYbeCtVYd2
+      iuy4JRxgti27r3sRzXcmABv3xhii350JZeCxSc5Efw1cblJq9vuc5jNIKj/9o/T2
+      Xj5CfKWLfzVNgI1E6kfzE3qDsYYMbq10vMiXezs6LXWmRbEB+qYzqDATCv9OUKbA
+      gTD/D+2NqjXUWLpK6EoeuJ4oqTjqVCaFtzqj1Ysqh36iT4Z9ehxVJKhiqA9exSDv
+      mMFPZ8XKwNrcmqH/SMdf4nPP2DVJoxLT+HGVASnDUz/8WNtfHODW9N5koOEcVy5K
+      sU/aAYgt2heG2cr0jVIu3UH66dQyfsalNimlfdh0LwQD0bpF1J4kaj6jjUtz2hz5
+      ZwIDAQAB
+      -----END PUBLIC KEY-----
+  - consumer: ms-customers-api
+    key: "ms-customers-api-key"
+    algorithm: RS256
+    rsa_public_key: |
+      -----BEGIN PUBLIC KEY-----
+      MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAnA/IT4oIAEwYbeCtVYd2
+      iuy4JRxgti27r3sRzXcmABv3xhii350JZeCxSc5Efw1cblJq9vuc5jNIKj/9o/T2
+      Xj5CfKWLfzVNgI1E6kfzE3qDsYYMbq10vMiXezs6LXWmRbEB+qYzqDATCv9OUKbA
+      gTD/D+2NqjXUWLpK6EoeuJ4oqTjqVCaFtzqj1Ysqh36iT4Z9ehxVJKhiqA9exSDv
+      mMFPZ8XKwNrcmqH/SMdf4nPP2DVJoxLT+HGVASnDUz/8WNtfHODW9N5koOEcVy5K
+      sU/aAYgt2heG2cr0jVIu3UH66dQyfsalNimlfdh0LwQD0bpF1J4kaj6jjUtz2hz5
+      ZwIDAQAB
+      -----END PUBLIC KEY-----
+
+# Services Configuration - Microservices
+services:
+  # Cases API Service
+  - name: ms-cases-api
+    url: http://ms-cases-api:8080
+    tags: ["microservice", "cases", "api"]
+    connect_timeout: 30000
+    write_timeout: 30000
+    read_timeout: 30000
+    retries: 3
+    
+  # Alerts API Service  
+  - name: ms-alerts-api
+    url: http://ms-alerts-api:8081
+    tags: ["microservice", "alerts", "api"]
+    connect_timeout: 30000
+    write_timeout: 30000
+    read_timeout: 30000
+    retries: 3
+    
+  # Reports API Service
+  - name: ms-reports-api
+    url: http://ms-reports-api:8082
+    tags: ["microservice", "reports", "api"]
+    connect_timeout: 30000
+    write_timeout: 30000
+    read_timeout: 30000
+    retries: 3
+    
+  # Customers API Service
+  - name: ms-customers-api
+    url: http://ms-customers-api:8083
+    tags: ["microservice", "customers", "api"]
+    connect_timeout: 30000
+    write_timeout: 30000
+    read_timeout: 30000
+    retries: 3
+
+# Routes Configuration
+routes:
+  # Cases API Routes
+  - name: cases-api-route
+    service: ms-cases-api
+    paths: ["/api/v1/cases"]
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
+    strip_path: false
+    preserve_host: false
+    tags: ["api", "cases"]
+    
+  # Alerts API Routes
+  - name: alerts-api-route
+    service: ms-alerts-api
+    paths: ["/api/v1/alerts"]
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
+    strip_path: false
+    preserve_host: false
+    tags: ["api", "alerts"]
+    
+  # Reports API Routes
+  - name: reports-api-route
+    service: ms-reports-api
+    paths: ["/api/v1/reports"]
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
+    strip_path: false
+    preserve_host: false
+    tags: ["api", "reports"]
+    
+  # Customers API Routes
+  - name: customers-api-route
+    service: ms-customers-api
+    paths: ["/api/v1/customers"]
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
+    strip_path: false
+    preserve_host: false
+    tags: ["api", "customers"]
+
+# Global Plugins
+plugins:
+  # CORS Plugin - Global
+  - name: cors
+    config:
+      origins:
+        - "http://localhost:3001"
+        - "http://localhost:5173"
+        - "https://eagle.fusionx.pro"
+      methods:
+        - GET
+        - POST
+        - PUT
+        - DELETE
+        - PATCH
+        - OPTIONS
+      headers:
+        - Accept
+        - Accept-Version
+        - Content-Length
+        - Content-MD5
+        - Content-Type
+        - Date
+        - Authorization
+        - X-Auth-Token
+        - X-Correlation-ID
+      exposed_headers:
+        - X-Auth-Token
+        - X-Correlation-ID
+      credentials: true
+      max_age: 3600
+      preflight_continue: false
+    tags: ["security", "cors"]
+    
+  # Request ID Plugin - Global
+  - name: correlation-id
+    config:
+      header_name: X-Correlation-ID
+      generator: uuid#counter
+      echo_downstream: true
+    tags: ["observability", "correlation"]
+    
+  # Rate Limiting Plugin - Global
+  - name: rate-limiting
+    config:
+      minute: 1000
+      hour: 10000
+      policy: local
+      fault_tolerant: true
+      hide_client_headers: false
+    tags: ["security", "rate-limiting"]
+    
+  # Security Headers Plugin - Global
+  - name: response-transformer
+    config:
+      add:
+        headers:
+          - "X-Content-Type-Options: nosniff"
+          - "X-Frame-Options: DENY"
+          - "X-XSS-Protection: 1; mode=block"
+          - "Referrer-Policy: strict-origin-when-cross-origin"
+          - "Content-Security-Policy: default-src 'self'"
+    tags: ["security", "headers"]
+
+  # Route-specific Plugins
+  # JWT Authentication for all API routes
+  - name: jwt
+    route: cases-api-route
+    config:
+      header_names: ["authorization"]
+      claims_to_verify: ["exp"]
+      key_claim_name: "iss"
+      secret_is_base64: false
+      run_on_preflight: false
+    tags: ["security", "jwt", "cases"]
+    
+  - name: jwt
+    route: alerts-api-route
+    config:
+      header_names: ["authorization"]
+      claims_to_verify: ["exp"]
+      key_claim_name: "iss"
+      secret_is_base64: false
+      run_on_preflight: false
+    tags: ["security", "jwt", "alerts"]
+    
+  - name: jwt
+    route: reports-api-route
+    config:
+      header_names: ["authorization"]
+      claims_to_verify: ["exp"]
+      key_claim_name: "iss"
+      secret_is_base64: false
+      run_on_preflight: false
+    tags: ["security", "jwt", "reports"]
+    
+  - name: jwt
+    route: customers-api-route
+    config:
+      header_names: ["authorization"]
+      claims_to_verify: ["exp"]
+      key_claim_name: "iss"
+      secret_is_base64: false
+      run_on_preflight: false
+    tags: ["security", "jwt", "customers"]
+
+  # Request Size Limiting
+  - name: request-size-limiting
+    config:
+      allowed_payload_size: 10
+    tags: ["security", "size-limiting"]
+
+  # Prometheus Metrics
+  - name: prometheus
+    config:
+      per_consumer: true
+      status_code_metrics: true
+      latency_metrics: true
+      bandwidth_metrics: true
+    tags: ["observability", "metrics"]

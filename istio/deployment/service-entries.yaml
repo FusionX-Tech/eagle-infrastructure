@@ -1,0 +1,206 @@
+# Service Entry para PostgreSQL (banco de dados externo)
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: postgres-external
+  namespace: eagle-services
+spec:
+  hosts:
+  - postgres.default.svc.cluster.local
+  - postgres-replica-1.default.svc.cluster.local
+  - postgres-replica-2.default.svc.cluster.local
+  ports:
+  - number: 5432
+    name: postgres
+    protocol: TCP
+  - number: 5433
+    name: postgres-replica-1
+    protocol: TCP
+  - number: 5434
+    name: postgres-replica-2
+    protocol: TCP
+  location: MESH_EXTERNAL
+  resolution: DNS
+---
+# Service Entry para Redis
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: redis-external
+  namespace: eagle-services
+spec:
+  hosts:
+  - redis-master.default.svc.cluster.local
+  - redis-replica.default.svc.cluster.local
+  ports:
+  - number: 6379
+    name: redis-master
+    protocol: TCP
+  - number: 6380
+    name: redis-replica
+    protocol: TCP
+  location: MESH_EXTERNAL
+  resolution: DNS
+---
+# Service Entry para Keycloak
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: keycloak-external
+  namespace: eagle-services
+spec:
+  hosts:
+  - keycloak.default.svc.cluster.local
+  ports:
+  - number: 8081
+    name: keycloak-http
+    protocol: HTTP
+  location: MESH_EXTERNAL
+  resolution: DNS
+---
+# Service Entry para HashiCorp Vault
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: vault-external
+  namespace: eagle-services
+spec:
+  hosts:
+  - vault.default.svc.cluster.local
+  ports:
+  - number: 8200
+    name: vault-http
+    protocol: HTTP
+  location: MESH_EXTERNAL
+  resolution: DNS
+---
+# Service Entry para LocalStack (SQS)
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: localstack-external
+  namespace: eagle-services
+spec:
+  hosts:
+  - localstack.default.svc.cluster.local
+  ports:
+  - number: 4566
+    name: localstack-http
+    protocol: HTTP
+  location: MESH_EXTERNAL
+  resolution: DNS
+---
+# Service Entry para Kong API Gateway
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: kong-external
+  namespace: eagle-services
+spec:
+  hosts:
+  - kong.default.svc.cluster.local
+  ports:
+  - number: 8080
+    name: kong-proxy
+    protocol: HTTP
+  - number: 8443
+    name: kong-proxy-ssl
+    protocol: HTTPS
+  - number: 8001
+    name: kong-admin
+    protocol: HTTP
+  location: MESH_EXTERNAL
+  resolution: DNS
+---
+# Service Entry para Portal da Transparência (API externa)
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: portal-transparencia
+  namespace: eagle-services
+spec:
+  hosts:
+  - api.portaldatransparencia.gov.br
+  ports:
+  - number: 443
+    name: https
+    protocol: HTTPS
+  - number: 80
+    name: http
+    protocol: HTTP
+  location: MESH_EXTERNAL
+  resolution: DNS
+---
+# Service Entry para CNEP (Cadastro Nacional de Empresas Punidas)
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: cnep-api
+  namespace: eagle-services
+spec:
+  hosts:
+  - www.portaldatransparencia.gov.br
+  ports:
+  - number: 443
+    name: https
+    protocol: HTTPS
+  - number: 80
+    name: http
+    protocol: HTTP
+  location: MESH_EXTERNAL
+  resolution: DNS
+---
+# Service Entry para CEIS (Cadastro de Empresas Inidôneas e Suspensas)
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: ceis-api
+  namespace: eagle-services
+spec:
+  hosts:
+  - www.portaldatransparencia.gov.br
+  ports:
+  - number: 443
+    name: https
+    protocol: HTTPS
+  - number: 80
+    name: http
+    protocol: HTTP
+  location: MESH_EXTERNAL
+  resolution: DNS
+---
+# Service Entry para serviços de DNS
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: dns-external
+  namespace: eagle-services
+spec:
+  hosts:
+  - kube-dns.kube-system.svc.cluster.local
+  ports:
+  - number: 53
+    name: dns-udp
+    protocol: UDP
+  - number: 53
+    name: dns-tcp
+    protocol: TCP
+  location: MESH_EXTERNAL
+  resolution: DNS
+---
+# Service Entry para NTP (sincronização de tempo)
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: ntp-external
+  namespace: eagle-services
+spec:
+  hosts:
+  - pool.ntp.org
+  - time.google.com
+  ports:
+  - number: 123
+    name: ntp
+    protocol: UDP
+  location: MESH_EXTERNAL
+  resolution: DNS

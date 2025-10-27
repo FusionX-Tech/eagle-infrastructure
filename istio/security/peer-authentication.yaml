@@ -1,0 +1,107 @@
+# Configuração global de mTLS para o namespace eagle-services
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: eagle-services
+spec:
+  # Modo STRICT: Todas as comunicações devem usar mTLS
+  mtls:
+    mode: STRICT
+---
+# Configuração específica para MS-Orchestrator
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: ms-orchestrator-mtls
+  namespace: eagle-services
+spec:
+  selector:
+    matchLabels:
+      app: ms-orchestrator
+  mtls:
+    mode: STRICT
+  # Configuração específica para portas
+  portLevelMtls:
+    8088:
+      mode: STRICT
+---
+# Configuração específica para MS-Alert
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: ms-alert-mtls
+  namespace: eagle-services
+spec:
+  selector:
+    matchLabels:
+      app: ms-alert
+  mtls:
+    mode: STRICT
+  portLevelMtls:
+    8083:
+      mode: STRICT
+---
+# Configuração específica para MS-Customer
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: ms-customer-mtls
+  namespace: eagle-services
+spec:
+  selector:
+    matchLabels:
+      app: ms-customer
+  mtls:
+    mode: STRICT
+  portLevelMtls:
+    8085:
+      mode: STRICT
+---
+# Configuração específica para MS-Transaction
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: ms-transaction-mtls
+  namespace: eagle-services
+spec:
+  selector:
+    matchLabels:
+      app: ms-transaction
+  mtls:
+    mode: STRICT
+  portLevelMtls:
+    8086:
+      mode: STRICT
+---
+# Configuração específica para MS-API
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: ms-api-mtls
+  namespace: eagle-services
+spec:
+  selector:
+    matchLabels:
+      app: ms-api
+  mtls:
+    mode: STRICT
+  portLevelMtls:
+    8087:
+      mode: STRICT
+---
+# Configuração específica para MS-Enrichment
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: ms-enrichment-mtls
+  namespace: eagle-services
+spec:
+  selector:
+    matchLabels:
+      app: ms-enrichment
+  mtls:
+    mode: STRICT
+  portLevelMtls:
+    8082:
+      mode: STRICT

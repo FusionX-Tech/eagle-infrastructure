@@ -1,0 +1,289 @@
+# Security Monitoring Configuration for Kong API Gateway
+_format_version: "3.0"
+
+# Security Monitoring Plugins
+plugins:
+  # Request/Response logging for security analysis
+  - name: http-log
+    config:
+      http_endpoint: "http://ms-orchestrator:8088/api/v1/security/events"
+      method: "POST"
+      content_type: "application/json"
+      timeout: 10000
+      keepalive: 60000
+      flush_timeout: 2
+      retry_count: 3
+      queue_size: 1000
+      headers:
+        Authorization: "Bearer eagle-security-token"
+        X-Source: "kong-security-monitor"
+        X-Event-Type: "security-log"
+      custom_fields_by_lua:
+        # Log security-relevant information
+        security_event: |
+          return {
+            timestamp = os.time(),
+            client_ip = kong.client.get_ip(),
+            user_agent = kong.request.get_header("User-Agent"),
+            request_method = kong.request.get_method(),
+            request_path = kong.request.get_path(),
+            request_size = kong.request.get_size(),
+            response_status = kong.response.get_status(),
+            response_size = kong.response.get_size(),
+            latency = kong.ctx.shared.response_latency,
+            consumer_id = kong.ctx.shared.authenticated_consumer and kong.ctx.shared.authenticated_consumer.id or nil,
+            route_id = kong.ctx.shared.route and kong.ctx.shared.route.id or nil,
+            service_id = kong.ctx.shared.service and kong.ctx.shared.service.id or nil
+          }
+          
+  # Prometheus metrics for security monitoring
+  - name: prometheus
+    config:
+      per_consumer: true
+      status_code_metrics: true
+      latency_metrics: true
+      bandwidth_metrics: true
+      upstream_health_metrics: true
+      
+  # File logging for audit trail
+  - name: file-log
+    config:
+      path: "/tmp/security-audit.log"
+      reopen: true
+      custom_fields_by_lua:
+        audit_event: |
+          local json = require "cjson"
+          return json.encode({
+            timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+            event_type = "api_access",
+            client_ip = kong.client.get_ip(),
+            forwarded_ip = kong.request.get_header("X-Forwarded-For"),
+            user_agent = kong.request.get_header("User-Agent"),
+            method = kong.request.get_method(),
+            path = kong.request.get_path(),
+            query = kong.request.get_raw_query(),
+            status = kong.response.get_status(),
+            consumer = kong.ctx.shared.authenticated_consumer and kong.ctx.shared.authenticated_consumer.username or "anonymous",
+            route = kong.ctx.shared.route and kong.ctx.shared.route.name or "unknown",
+            service = kong.ctx.shared.service and kong.ctx.shared.service.name or "unknown",
+            latency_ms = kong.ctx.shared.response_latency,
+            request_id = kong.ctx.shared.request_id or kong.request.get_header("X-Request-ID")
+          })
+
+# Security Event Detection Plugins
+plugins:
+  # Detect suspicious patterns
+  - name: pre-function
+    config:
+      access: |
+        -- Security event detection
+        local client_ip = kong.client.get_ip()
+        local user_agent = kong.request.get_header("User-Agent") or ""
+        local method = kong.request.get_method()
+        local path = kong.request.get_path()
+        
+        -- Detect potential security threats
+        local security_events = {}
+        
+        -- SQL Injection patterns
+        local sql_patterns = {
+          "union.*select", "select.*from", "insert.*into", "delete.*from",
+          "drop.*table", "alter.*table", "exec.*sp_", "xp_cmdshell",
+          "'.*or.*'", "1=1", "1' or '1'='1"
+        }
+        
+        -- XSS patterns  
+        local xss_patterns = {
+          "<script", "javascript:", "onload=", "onerror=", "onclick=",
+          "alert%(", "document%.cookie", "window%.location"
+        }
+        
+        -- Path traversal patterns
+        local traversal_patterns = {
+          "%.%./", "%.%.\\", "/etc/passwd", "/proc/", "\\windows\\",
+          "boot%.ini", "web%.config"
+        }
+        
+        -- Check for suspicious patterns in query parameters and path
+        local query = kong.request.get_raw_query() or ""
+        local full_path = path .. "?" .. query
+        
+        -- SQL Injection detection
+        for _, pattern in ipairs(sql_patterns) do
+          if string.match(string.lower(full_path), pattern) then
+            table.insert(security_events, {
+              type = "sql_injection_attempt",
+              pattern = pattern,
+              severity = "high"
+            })
+          end
+        end
+        
+        -- XSS detection
+        for _, pattern in ipairs(xss_patterns) do
+          if string.match(string.lower(full_path), pattern) then
+            table.insert(security_events, {
+              type = "xss_attempt", 
+              pattern = pattern,
+              severity = "high"
+            })
+          end
+        end
+        
+        -- Path traversal detection
+        for _, pattern in ipairs(traversal_patterns) do
+          if string.match(string.lower(full_path), pattern) then
+            table.insert(security_events, {
+              type = "path_traversal_attempt",
+              pattern = pattern,
+              severity = "high"
+            })
+          end
+        end
+        
+        -- Suspicious User-Agent detection
+        local suspicious_agents = {
+          "sqlmap", "nikto", "nmap", "masscan", "zap", "burp",
+          "acunetix", "nessus", "openvas", "w3af"
+        }
+        
+        for _, agent in ipairs(suspicious_agents) do
+          if string.match(string.lower(user_agent), agent) then
+            table.insert(security_events, {
+              type = "suspicious_user_agent",
+              agent = agent,
+              severity = "medium"
+            })
+          end
+        end
+        
+        -- Rate limiting bypass attempts
+        if method == "POST" and string.match(path, "/api/v1/alerts") then
+          local content_length = kong.request.get_header("Content-Length")
+          if content_length and tonumber(content_length) > 1048576 then -- 1MB
+            table.insert(security_events, {
+              type = "large_payload_attempt",
+              size = content_length,
+              severity = "medium"
+            })
+          end
+        end
+        
+        -- Store security events in context for logging
+        if #security_events > 0 then
+          kong.ctx.shared.security_events = security_events
+          
+          -- Log high severity events immediately
+          for _, event in ipairs(security_events) do
+            if event.severity == "high" then
+              kong.log.warn("Security threat detected: ", event.type, " from IP: ", client_ip)
+            end
+          end
+        end
+        
+  # Response security analysis
+  - name: header_filter
+    config:
+      access: |
+        -- Analyze response for information leakage
+        local status = kong.response.get_status()
+        local headers = kong.response.get_headers()
+        
+        -- Check for information disclosure
+        local disclosure_headers = {
+          "server", "x-powered-by", "x-aspnet-version", 
+          "x-aspnetmvc-version", "x-runtime"
+        }
+        
+        for _, header in ipairs(disclosure_headers) do
+          if headers[header] then
+            kong.log.info("Information disclosure header detected: ", header)
+          end
+        end
+        
+        -- Check for error responses that might leak information
+        if status >= 500 then
+          local body = kong.response.get_raw_body()
+          if body and (string.match(body, "stack trace") or 
+                      string.match(body, "SQLException") or
+                      string.match(body, "NullPointerException")) then
+            kong.log.warn("Potential information leakage in error response")
+          end
+        end
+
+# Alerting Configuration
+plugins:
+  # Real-time security alerting
+  - name: post-function
+    config:
+      access: |
+        -- Send real-time alerts for critical security events
+        local security_events = kong.ctx.shared.security_events
+        
+        if security_events then
+          for _, event in ipairs(security_events) do
+            if event.severity == "high" then
+              -- Send immediate alert (implement webhook or message queue)
+              local alert_data = {
+                timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+                event_type = event.type,
+                severity = event.severity,
+                client_ip = kong.client.get_ip(),
+                user_agent = kong.request.get_header("User-Agent"),
+                path = kong.request.get_path(),
+                method = kong.request.get_method(),
+                pattern = event.pattern or event.agent,
+                request_id = kong.request.get_header("X-Request-ID")
+              }
+              
+              -- Log critical alert
+              kong.log.crit("SECURITY ALERT: ", event.type, " detected from ", kong.client.get_ip())
+            end
+          end
+        end
+
+# Security Metrics Routes
+routes:
+  - name: security-metrics
+    paths: ["/security/metrics"]
+    methods: ["GET"]
+    service: ms-orchestrator
+    tags: ["security", "metrics", "internal"]
+
+# Security Dashboard Route  
+routes:
+  - name: security-dashboard
+    paths: ["/security/dashboard"]
+    methods: ["GET"]
+    service: ms-orchestrator
+    tags: ["security", "dashboard", "internal"]
+
+# Security-specific plugins for metrics routes
+plugins:
+  # Restrict access to security endpoints
+  - name: key-auth
+    route: security-metrics
+    config:
+      key_names: ["X-Security-Key"]
+      
+  - name: key-auth
+    route: security-dashboard
+    config:
+      key_names: ["X-Security-Key"]
+      
+  # Rate limiting for security endpoints
+  - name: rate-limiting
+    route: security-metrics
+    config:
+      minute: 60
+      hour: 600
+      policy: redis
+      redis_host: redis-master
+      
+  - name: rate-limiting
+    route: security-dashboard
+    config:
+      minute: 30
+      hour: 300
+      policy: redis
+      redis_host: redis-master

@@ -1,0 +1,167 @@
+# CORS Configuration for Kong API Gateway
+_format_version: "3.0"
+
+# CORS Plugin Configuration
+plugins:
+  # Global CORS configuration
+  - name: cors
+    config:
+      # Allowed origins - configure based on environment
+      origins:
+        - "http://localhost:3000"           # React development
+        - "http://localhost:5173"           # Vite development  
+        - "http://localhost:4200"           # Angular development
+        - "https://eagle.fusionx.com.br"    # Production frontend
+        - "https://app.eagle.fusionx.com.br" # Production app
+        - "https://admin.eagle.fusionx.com.br" # Admin panel
+        
+      # Allowed HTTP methods
+      methods:
+        - "GET"
+        - "POST" 
+        - "PUT"
+        - "PATCH"
+        - "DELETE"
+        - "OPTIONS"
+        - "HEAD"
+        
+      # Allowed headers
+      headers:
+        - "Accept"
+        - "Accept-Version"
+        - "Authorization"
+        - "Content-Length"
+        - "Content-MD5"
+        - "Content-Type"
+        - "Date"
+        - "X-Auth-Token"
+        - "X-Request-ID"
+        - "X-Correlation-ID"
+        - "X-API-Key"
+        - "X-Client-Version"
+        - "X-Device-ID"
+        - "Cache-Control"
+        - "Pragma"
+        
+      # Headers exposed to the client
+      exposed_headers:
+        - "X-Auth-Token"
+        - "X-Request-ID"
+        - "X-Correlation-ID"
+        - "X-Rate-Limit-Remaining"
+        - "X-Rate-Limit-Reset"
+        - "X-API-Version"
+        - "Location"
+        - "ETag"
+        - "Last-Modified"
+        
+      # Allow credentials (cookies, authorization headers)
+      credentials: true
+      
+      # Preflight cache duration (1 hour)
+      max_age: 3600
+      
+      # Don't continue processing preflight requests
+      preflight_continue: false
+      
+      # Send Vary: Origin header
+      vary_origin: true
+
+# Route-specific CORS configurations
+routes:
+  # Public API routes - more permissive CORS
+  - name: public-api-cors
+    service: ms-orchestrator
+    paths: ["/api/v1/public"]
+    methods: ["GET", "POST", "OPTIONS"]
+    tags: ["public", "cors-permissive"]
+    
+  # Internal API routes - restrictive CORS
+  - name: internal-api-cors
+    service: ms-orchestrator  
+    paths: ["/api/v1/internal"]
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    tags: ["internal", "cors-restrictive"]
+
+# Route-specific CORS plugins
+plugins:
+  # Permissive CORS for public APIs
+  - name: cors
+    route: public-api-cors
+    config:
+      origins:
+        - "*"  # Allow all origins for public APIs (use with caution)
+      methods:
+        - "GET"
+        - "POST"
+        - "OPTIONS"
+      headers:
+        - "Accept"
+        - "Content-Type"
+        - "Authorization"
+      credentials: false
+      max_age: 86400  # 24 hours
+      
+  # Restrictive CORS for internal APIs
+  - name: cors
+    route: internal-api-cors
+    config:
+      origins:
+        - "https://eagle.fusionx.com.br"
+        - "https://admin.eagle.fusionx.com.br"
+      methods:
+        - "GET"
+        - "POST"
+        - "PUT"
+        - "DELETE"
+        - "OPTIONS"
+      headers:
+        - "Accept"
+        - "Content-Type"
+        - "Authorization"
+        - "X-API-Key"
+      credentials: true
+      max_age: 3600  # 1 hour
+      
+# Pre-flight OPTIONS handling
+routes:
+  - name: preflight-handler
+    paths: ["/"]
+    methods: ["OPTIONS"]
+    tags: ["preflight", "cors"]
+
+plugins:
+  # Handle preflight requests
+  - name: pre-function
+    route: preflight-handler
+    config:
+      access: |
+        -- Handle CORS preflight requests
+        if kong.request.get_method() == "OPTIONS" then
+          local origin = kong.request.get_header("Origin")
+          local allowed_origins = {
+            "http://localhost:3000",
+            "http://localhost:5173", 
+            "https://eagle.fusionx.com.br",
+            "https://app.eagle.fusionx.com.br"
+          }
+          
+          -- Check if origin is allowed
+          local origin_allowed = false
+          for _, allowed_origin in ipairs(allowed_origins) do
+            if origin == allowed_origin then
+              origin_allowed = true
+              break
+            end
+          end
+          
+          if origin_allowed then
+            kong.response.set_header("Access-Control-Allow-Origin", origin)
+            kong.response.set_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+            kong.response.set_header("Access-Control-Allow-Headers", "Accept, Authorization, Content-Type, X-Request-ID")
+            kong.response.set_header("Access-Control-Allow-Credentials", "true")
+            kong.response.set_header("Access-Control-Max-Age", "3600")
+          end
+          
+          return kong.response.exit(200, {message = "CORS preflight"})
+        end

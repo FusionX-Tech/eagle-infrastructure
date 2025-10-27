@@ -1,0 +1,103 @@
+# Eagle Alert System - Observability Configuration
+# This configuration should be included in all microservices
+
+spring:
+  application:
+    name: ${SERVICE_NAME:eagle-service}
+  
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,loggers,env,configprops
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+  metrics:
+    tags:
+      service: ${spring.application.name}
+      environment: ${ENVIRONMENT:development}
+      version: ${BUILD_VERSION:unknown}
+    export:
+      prometheus:
+        enabled: true
+        step: 15s
+        descriptions: true
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        eagle.alerts.processing.duration: true
+        eagle.enrichment.duration: true
+        eagle.database.query.duration: true
+        eagle.external.service.call.duration: true
+      percentiles:
+        http.server.requests: 0.5, 0.95, 0.99
+        eagle.alerts.processing.duration: 0.5, 0.95, 0.99
+        eagle.enrichment.duration: 0.5, 0.95, 0.99
+        eagle.database.query.duration: 0.5, 0.95, 0.99
+        eagle.external.service.call.duration: 0.5, 0.95, 0.99
+      sla:
+        http.server.requests: 50ms, 100ms, 200ms, 500ms, 1s, 2s
+        eagle.alerts.processing.duration: 100ms, 500ms, 1s, 5s, 10s
+        eagle.enrichment.duration: 1s, 5s, 10s, 30s, 60s
+  
+  # Tracing configuration
+  tracing:
+    sampling:
+      probability: ${TRACING_SAMPLING_RATE:0.1}
+    zipkin:
+      endpoint: ${JAEGER_ENDPOINT:http://jaeger:9411/api/v2/spans}
+    baggage:
+      correlation:
+        enabled: true
+        fields:
+          - user-id
+          - session-id
+          - request-id
+          - customer-document
+      remote-fields:
+        - user-id
+        - session-id
+        - request-id
+        - customer-document
+
+# Logging configuration for structured logging
+logging:
+  level:
+    pro.fusionx.eagle: ${LOG_LEVEL:INFO}
+    org.springframework.web: ${WEB_LOG_LEVEL:INFO}
+    org.springframework.security: ${SECURITY_LOG_LEVEL:INFO}
+    org.springframework.data: ${DATA_LOG_LEVEL:INFO}
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+  file:
+    name: /var/log/eagle/${spring.application.name}.log
+    max-size: 100MB
+    max-history: 30
+
+# Custom Eagle metrics configuration
+eagle:
+  metrics:
+    enabled: true
+    business-metrics:
+      enabled: true
+      alert-processing: true
+      enrichment-tracking: true
+      customer-analysis: true
+    performance-metrics:
+      enabled: true
+      database-queries: true
+      external-services: true
+      memory-usage: true
+    security-metrics:
+      enabled: true
+      authentication-events: true
+      authorization-failures: true
+      suspicious-activities: true

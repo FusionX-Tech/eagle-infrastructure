@@ -1,0 +1,278 @@
+# Network Policy para isolamento de rede do namespace eagle-services
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: eagle-services-network-policy
+  namespace: eagle-services
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+  
+  # Regras de Ingress (tráfego de entrada)
+  ingress:
+  # Permitir tráfego do API Gateway
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: default
+    - namespaceSelector:
+        matchLabels:
+          name: kong
+    ports:
+    - protocol: TCP
+      port: 8080
+    - protocol: TCP
+      port: 8081
+    - protocol: TCP
+      port: 8082
+    - protocol: TCP
+      port: 8083
+    - protocol: TCP
+      port: 8085
+    - protocol: TCP
+      port: 8086
+    - protocol: TCP
+      port: 8087
+    - protocol: TCP
+      port: 8088
+  
+  # Permitir tráfego entre pods do mesmo namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: eagle-services
+  
+  # Permitir tráfego do Istio system
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: istio-system
+  
+  # Permitir tráfego de monitoramento
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 15090  # Envoy admin port
+    - protocol: TCP
+      port: 15000  # Envoy admin port
+  
+  # Regras de Egress (tráfego de saída)
+  egress:
+  # Permitir DNS
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  
+  # Permitir acesso a serviços de infraestrutura no namespace default
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: default
+    ports:
+    # PostgreSQL
+    - protocol: TCP
+      port: 5432
+    - protocol: TCP
+      port: 5433
+    - protocol: TCP
+      port: 5434
+    # Redis
+    - protocol: TCP
+      port: 6379
+    - protocol: TCP
+      port: 6380
+    # Keycloak
+    - protocol: TCP
+      port: 8081
+    # Vault
+    - protocol: TCP
+      port: 8200
+    # LocalStack (SQS)
+    - protocol: TCP
+      port: 4566
+    # Kong Gateway
+    - protocol: TCP
+      port: 8080
+    - protocol: TCP
+      port: 8443
+    - protocol: TCP
+      port: 8001
+  
+  # Permitir comunicação com Istio system
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: istio-system
+  
+  # Permitir comunicação entre pods do mesmo namespace
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: eagle-services
+  
+  # Permitir acesso a APIs externas (Portal da Transparência, etc.)
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 80
+    - protocol: TCP
+      port: 443
+---
+# Network Policy específica para MS-Orchestrator
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ms-orchestrator-network-policy
+  namespace: eagle-services
+spec:
+  podSelector:
+    matchLabels:
+      app: ms-orchestrator
+  policyTypes:
+  - Ingress
+  - Egress
+  
+  ingress:
+  # Permitir tráfego do API Gateway
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: default
+    ports:
+    - protocol: TCP
+      port: 8088
+  
+  # Permitir tráfego de outros microserviços
+  - from:
+    - podSelector:
+        matchLabels:
+          app: ms-alert
+    - podSelector:
+        matchLabels:
+          app: ms-enrichment
+    ports:
+    - protocol: TCP
+      port: 8088
+  
+  egress:
+  # Herdar regras globais
+  - to:
+    - namespaceSelector: {}
+---
+# Network Policy específica para MS-Alert
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ms-alert-network-policy
+  namespace: eagle-services
+spec:
+  podSelector:
+    matchLabels:
+      app: ms-alert
+  policyTypes:
+  - Ingress
+  - Egress
+  
+  ingress:
+  # Permitir tráfego do MS-Orchestrator
+  - from:
+    - podSelector:
+        matchLabels:
+          app: ms-orchestrator
+    ports:
+    - protocol: TCP
+      port: 8083
+  
+  # Permitir tráfego do MS-Enrichment
+  - from:
+    - podSelector:
+        matchLabels:
+          app: ms-enrichment
+    ports:
+    - protocol: TCP
+      port: 8083
+  
+  egress:
+  # Permitir comunicação com MS-Customer
+  - to:
+    - podSelector:
+        matchLabels:
+          app: ms-customer
+    ports:
+    - protocol: TCP
+      port: 8085
+  
+  # Permitir comunicação com MS-Orchestrator
+  - to:
+    - podSelector:
+        matchLabels:
+          app: ms-orchestrator
+    ports:
+    - protocol: TCP
+      port: 8088
+---
+# Network Policy específica para MS-Enrichment
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ms-enrichment-network-policy
+  namespace: eagle-services
+spec:
+  podSelector:
+    matchLabels:
+      app: ms-enrichment
+  policyTypes:
+  - Ingress
+  - Egress
+  
+  ingress:
+  # Permitir tráfego do MS-Alert
+  - from:
+    - podSelector:
+        matchLabels:
+          app: ms-alert
+    ports:
+    - protocol: TCP
+      port: 8082
+  
+  egress:
+  # Permitir comunicação com todos os microserviços de dados
+  - to:
+    - podSelector:
+        matchLabels:
+          app: ms-customer
+    ports:
+    - protocol: TCP
+      port: 8085
+  
+  - to:
+    - podSelector:
+        matchLabels:
+          app: ms-transaction
+    ports:
+    - protocol: TCP
+      port: 8086
+  
+  - to:
+    - podSelector:
+        matchLabels:
+          app: ms-api
+    ports:
+    - protocol: TCP
+      port: 8087
+  
+  - to:
+    - podSelector:
+        matchLabels:
+          app: ms-alert
+    ports:
+    - protocol: TCP
+      port: 8083

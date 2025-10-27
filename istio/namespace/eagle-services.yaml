@@ -1,0 +1,71 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: eagle-services
+  labels:
+    istio-injection: enabled
+    name: eagle-services
+    app.kubernetes.io/name: eagle-services
+    app.kubernetes.io/part-of: eagle-alert-system
+  annotations:
+    istio.io/rev: default
+---
+# Service Account para MS-Orchestrator
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ms-orchestrator
+  namespace: eagle-services
+  labels:
+    app: ms-orchestrator
+    version: v1
+---
+# Service Account para MS-Alert
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ms-alert
+  namespace: eagle-services
+  labels:
+    app: ms-alert
+    version: v1
+---
+# Service Account para MS-Customer
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ms-customer
+  namespace: eagle-services
+  labels:
+    app: ms-customer
+    version: v1
+---
+# Service Account para MS-Transaction
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ms-transaction
+  namespace: eagle-services
+  labels:
+    app: ms-transaction
+    version: v1
+---
+# Service Account para MS-API
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ms-api
+  namespace: eagle-services
+  labels:
+    app: ms-api
+    version: v1
+---
+# Service Account para MS-Enrichment
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ms-enrichment
+  namespace: eagle-services
+  labels:
+    app: ms-enrichment
+    version: v1

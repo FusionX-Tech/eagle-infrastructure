@@ -1,0 +1,145 @@
+# Blue-Green Deployment Configuration using Istio
+# This configuration enables zero-downtime deployments by maintaining two identical environments
+
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: ms-orchestrator-blue-green
+  namespace: eagle-services
+  labels:
+    app: ms-orchestrator
+    deployment-strategy: blue-green
+spec:
+  hosts:
+  - ms-orchestrator
+  http:
+  - match:
+    - headers:
+        x-deployment-version:
+          exact: green
+    route:
+    - destination:
+        host: ms-orchestrator
+        subset: green
+      weight: 100
+  - route:
+    - destination:
+        host: ms-orchestrator
+        subset: blue
+      weight: 100
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: ms-orchestrator-blue-green
+  namespace: eagle-services
+  labels:
+    app: ms-orchestrator
+    deployment-strategy: blue-green
+spec:
+  host: ms-orchestrator
+  subsets:
+  - name: blue
+    labels:
+      version: v1
+      deployment-color: blue
+    trafficPolicy:
+      connectionPool:
+        tcp:
+          maxConnections: 100
+        http:
+          http1MaxPendingRequests: 50
+          maxRequestsPerConnection: 10
+      circuitBreaker:
+        consecutiveGatewayErrors: 5
+        interval: 30s
+        baseEjectionTime: 30s
+        maxEjectionPercent: 50
+  - name: green
+    labels:
+      version: v2
+      deployment-color: green
+    trafficPolicy:
+      connectionPool:
+        tcp:
+          maxConnections: 100
+        http:
+          http1MaxPendingRequests: 50
+          maxRequestsPerConnection: 10
+      circuitBreaker:
+        consecutiveGatewayErrors: 5
+        interval: 30s
+        baseEjectionTime: 30s
+        maxEjectionPercent: 50
+---
+# Blue-Green deployment for MS-Alert
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: ms-alert-blue-green
+  namespace: eagle-services
+  labels:
+    app: ms-alert
+    deployment-strategy: blue-green
+spec:
+  hosts:
+  - ms-alert
+  http:
+  - match:
+    - headers:
+        x-deployment-version:
+          exact: green
+    route:
+    - destination:
+        host: ms-alert
+        subset: green
+      weight: 100
+  - route:
+    - destination:
+        host: ms-alert
+        subset: blue
+      weight: 100
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: ms-alert-blue-green
+  namespace: eagle-services
+  labels:
+    app: ms-alert
+    deployment-strategy: blue-green
+spec:
+  host: ms-alert
+  subsets:
+  - name: blue
+    labels:
+      version: v1
+      deployment-color: blue
+    trafficPolicy:
+      connectionPool:
+        tcp:
+          maxConnections: 200
+        http:
+          http1MaxPendingRequests: 100
+          maxRequestsPerConnection: 20
+      circuitBreaker:
+        consecutiveGatewayErrors: 5
+        interval: 30s
+        baseEjectionTime: 30s
+        maxEjectionPercent: 50
+  - name: green
+    labels:
+      version: v2
+      deployment-color: green
+    trafficPolicy:
+      connectionPool:
+        tcp:
+          maxConnections: 200
+        http:
+          http1MaxPendingRequests: 100
+          maxRequestsPerConnection: 20
+      circuitBreaker:
+        consecutiveGatewayErrors: 5
+        interval: 30s
+        baseEjectionTime: 30s
+        maxEjectionPercent: 50

@@ -1,0 +1,67 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ms-customer-hpa
+  namespace: eagle-services
+  labels:
+    app: ms-customer
+    component: customer-data
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ms-customer
+  minReplicas: 2
+  maxReplicas: 15
+  metrics:
+  # CPU-based scaling
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  # Memory-based scaling (higher threshold due to caching)
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 85
+  # Custom metric: SQS queue depth for customer data requests
+  - type: Pods
+    pods:
+      metric:
+        name: sqs_messages_visible_customer_data_request
+      target:
+        type: AverageValue
+        averageValue: "8"
+  # Custom metric: Cache hit ratio (scale up when hit ratio is low)
+  - type: Pods
+    pods:
+      metric:
+        name: redis_cache_hit_ratio_inverted
+      target:
+        type: AverageValue
+        averageValue: "0.3"
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 90
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 60
+      - type: Pods
+        value: 2
+        periodSeconds: 60
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 30
+        periodSeconds: 60
+      - type: Pods
+        value: 1
+        periodSeconds: 60
+      selectPolicy: Min

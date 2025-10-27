@@ -1,0 +1,100 @@
+# Configuração do Kind para desenvolvimento local com Istio
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: eagle-istio-cluster
+
+# Configuração de rede
+networking:
+  # Desabilitar CNI padrão para usar Istio CNI
+  disableDefaultCNI: false
+  # Configurar subnet para evitar conflitos
+  podSubnet: "10.244.0.0/16"
+  serviceSubnet: "10.96.0.0/16"
+  # Configurar API server
+  apiServerAddress: "127.0.0.1"
+  apiServerPort: 6443
+
+# Configuração dos nós
+nodes:
+# Control plane node
+- role: control-plane
+  image: kindest/node:v1.28.0
+  kubeadmConfigPatches:
+  - |
+    kind: InitConfiguration
+    nodeRegistration:
+      kubeletExtraArgs:
+        node-labels: "ingress-ready=true"
+  extraPortMappings:
+  # Istio Ingress Gateway
+  - containerPort: 80
+    hostPort: 8080
+    protocol: TCP
+  - containerPort: 443
+    hostPort: 8443
+    protocol: TCP
+  # Istio Pilot (istiod)
+  - containerPort: 15010
+    hostPort: 15010
+    protocol: TCP
+  # Istio Ingress Gateway status port
+  - containerPort: 15021
+    hostPort: 15021
+    protocol: TCP
+  # Grafana
+  - containerPort: 3000
+    hostPort: 3000
+    protocol: TCP
+  # Jaeger
+  - containerPort: 16686
+    hostPort: 16686
+    protocol: TCP
+  # Kiali
+  - containerPort: 20001
+    hostPort: 20001
+    protocol: TCP
+  # Prometheus
+  - containerPort: 9090
+    hostPort: 9090
+    protocol: TCP
+  extraMounts:
+  # Mount para configurações do Istio
+  - hostPath: ./infra/istio
+    containerPath: /istio-config
+    readOnly: true
+  # Mount para logs
+  - hostPath: ./logs
+    containerPath: /var/log/istio
+    readOnly: false
+
+# Worker nodes para simular ambiente distribuído
+- role: worker
+  image: kindest/node:v1.28.0
+  extraMounts:
+  - hostPath: ./logs
+    containerPath: /var/log/istio
+    readOnly: false
+
+- role: worker
+  image: kindest/node:v1.28.0
+  extraMounts:
+  - hostPath: ./logs
+    containerPath: /var/log/istio
+    readOnly: false
+
+# Configurações adicionais do cluster
+kubeadmConfigPatches:
+- |
+  kind: ClusterConfiguration
+  apiServer:
+    extraArgs:
+      enable-admission-plugins: NodeRestriction,MutatingAdmissionWebhook,ValidatingAdmissionWebhook
+  controllerManager:
+    extraArgs:
+      bind-address: 0.0.0.0
+  scheduler:
+    extraArgs:
+      bind-address: 0.0.0.0
+- |
+  kind: KubeProxyConfiguration
+  metricsBindAddress: 0.0.0.0

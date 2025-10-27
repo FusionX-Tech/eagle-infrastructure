@@ -1,0 +1,213 @@
+{
+  "realm": "eagle",
+  "enabled": true,
+  "displayName": "Eagle Development Realm",
+  "displayNameHtml": "<div class=\"kc-logo-text\"><span>Eagle Development</span></div>",
+  "accessTokenLifespan": 300,
+  "accessTokenLifespanForImplicitFlow": 900,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "waitIncrementSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "maxDeltaTimeSeconds": 43200,
+  "failureFactor": 30,
+  "defaultRoles": ["offline_access", "uma_authorization"],
+  "requiredCredentials": ["password"],
+  "otpPolicyType": "totp",
+  "otpPolicyAlgorithm": "HmacSHA1",
+  "otpPolicyInitialCounter": 0,
+  "otpPolicyDigits": 6,
+  "otpPolicyLookAheadWindow": 1,
+  "otpPolicyPeriod": 30,
+  "roles": {
+    "realm": [
+      {
+        "name": "MICROSERVICE",
+        "description": "Base role for microservice authentication"
+      },
+      {
+        "name": "CUSTOMER_READ",
+        "description": "Permission to read customer data"
+      },
+      {
+        "name": "CUSTOMER_WRITE",
+        "description": "Permission to write customer data"
+      },
+      {
+        "name": "ALERT_SEND",
+        "description": "Permission to send alerts"
+      },
+      {
+        "name": "ENRICHMENT_READ",
+        "description": "Permission to read enrichment data"
+      },
+      {
+        "name": "ENRICHMENT_WRITE",
+        "description": "Permission to write enrichment data"
+      },
+      {
+        "name": "ORCHESTRATOR_EXECUTE",
+        "description": "Permission to execute orchestration workflows"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "ms-customer",
+      "name": "Customer Microservice",
+      "description": "Service account for customer microservice operations",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "customer-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "publicClient": false,
+      "protocol": "openid-connect",
+      "attributes": {
+        "access.token.lifespan": "300"
+      },
+      "defaultRoles": [
+        "MICROSERVICE",
+        "CUSTOMER_READ",
+        "CUSTOMER_WRITE",
+        "ALERT_SEND"
+      ]
+    },
+    {
+      "clientId": "ms-alert",
+      "name": "Alert Microservice",
+      "description": "Service account for alert microservice operations",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "alert-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "publicClient": false,
+      "protocol": "openid-connect",
+      "attributes": {
+        "access.token.lifespan": "300"
+      },
+      "defaultRoles": ["MICROSERVICE", "ALERT_SEND", "CUSTOMER_READ"]
+    },
+    {
+      "clientId": "ms-enrichment",
+      "name": "Enrichment Microservice",
+      "description": "Service account for enrichment microservice operations",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "enrichment-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "publicClient": false,
+      "protocol": "openid-connect",
+      "attributes": {
+        "access.token.lifespan": "300"
+      },
+      "defaultRoles": [
+        "MICROSERVICE",
+        "ENRICHMENT_READ",
+        "ENRICHMENT_WRITE",
+        "CUSTOMER_READ"
+      ]
+    },
+    {
+      "clientId": "ms-orchestrator",
+      "name": "Orchestrator Microservice",
+      "description": "Service account for orchestrator microservice operations",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "orchestrator-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "publicClient": false,
+      "protocol": "openid-connect",
+      "attributes": {
+        "access.token.lifespan": "300"
+      },
+      "defaultRoles": [
+        "MICROSERVICE",
+        "ORCHESTRATOR_EXECUTE",
+        "CUSTOMER_READ",
+        "ALERT_SEND"
+      ]
+    },
+    {
+      "clientId": "eagle-frontend",
+      "name": "Eagle Frontend Application",
+      "description": "Frontend application for Eagle system",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "frontend-secret",
+      "serviceAccountsEnabled": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "publicClient": false,
+      "protocol": "openid-connect",
+      "redirectUris": ["http://localhost:5173/*", "http://localhost:3000/*"],
+      "webOrigins": ["http://localhost:5173", "http://localhost:3000"],
+      "attributes": {
+        "access.token.lifespan": "1800"
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "service-account-ms-customer",
+      "enabled": true,
+      "serviceAccountClientId": "ms-customer",
+      "realmRoles": [
+        "MICROSERVICE",
+        "CUSTOMER_READ",
+        "CUSTOMER_WRITE",
+        "ALERT_SEND"
+      ]
+    },
+    {
+      "username": "service-account-ms-alert",
+      "enabled": true,
+      "serviceAccountClientId": "ms-alert",
+      "realmRoles": ["MICROSERVICE", "ALERT_SEND", "CUSTOMER_READ"]
+    },
+    {
+      "username": "service-account-ms-enrichment",
+      "enabled": true,
+      "serviceAccountClientId": "ms-enrichment",
+      "realmRoles": [
+        "MICROSERVICE",
+        "ENRICHMENT_READ",
+        "ENRICHMENT_WRITE",
+        "CUSTOMER_READ"
+      ]
+    },
+    {
+      "username": "service-account-ms-orchestrator",
+      "enabled": true,
+      "serviceAccountClientId": "ms-orchestrator",
+      "realmRoles": [
+        "MICROSERVICE",
+        "ORCHESTRATOR_EXECUTE",
+        "CUSTOMER_READ",
+        "ALERT_SEND"
+      ]
+    }
+  ]
+}

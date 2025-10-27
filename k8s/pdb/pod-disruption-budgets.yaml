@@ -1,0 +1,91 @@
+# Pod Disruption Budgets to ensure availability during deployments and node maintenance
+
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ms-orchestrator-pdb
+  namespace: eagle-services
+  labels:
+    app: ms-orchestrator
+    component: orchestrator
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: ms-orchestrator
+      version: v1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ms-alert-pdb
+  namespace: eagle-services
+  labels:
+    app: ms-alert
+    component: alert-management
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: ms-alert
+      version: v1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ms-customer-pdb
+  namespace: eagle-services
+  labels:
+    app: ms-customer
+    component: customer-data
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: ms-customer
+      version: v1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ms-transaction-pdb
+  namespace: eagle-services
+  labels:
+    app: ms-transaction
+    component: transaction-analytics
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: ms-transaction
+      version: v1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ms-api-pdb
+  namespace: eagle-services
+  labels:
+    app: ms-api
+    component: external-api
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: ms-api
+      version: v1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ms-enrichment-pdb
+  namespace: eagle-services
+  labels:
+    app: ms-enrichment
+    component: data-enrichment
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: ms-enrichment
+      version: v1

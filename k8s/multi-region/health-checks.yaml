@@ -1,0 +1,228 @@
+# Cross-Region Health Checks Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: health-check-config
+  namespace: eagle-services
+data:
+  health-check-script.sh: |
+    #!/bin/bash
+    
+    # Health check configuration
+    PRIMARY_REGION_ENDPOINT="${PRIMARY_REGION_ENDPOINT:-https://api-primary.eagle.com}"
+    SECONDARY_REGION_ENDPOINT="${SECONDARY_REGION_ENDPOINT:-https://api-secondary.eagle.com}"
+    HEALTH_CHECK_TIMEOUT="${HEALTH_CHECK_TIMEOUT:-30}"
+    FAILURE_THRESHOLD="${FAILURE_THRESHOLD:-3}"
+    
+    # Function to check region health
+    check_region_health() {
+        local endpoint=$1
+        local region_name=$2
+        
+        echo "Checking health for region: $region_name"
+        
+        # Check API Gateway health
+        if ! curl -sf --max-time $HEALTH_CHECK_TIMEOUT "$endpoint/health" > /dev/null 2>&1; then
+            echo "CRITICAL: API Gateway health check failed for $region_name"
+            return 1
+        fi
+        
+        # Check database connectivity
+        if ! curl -sf --max-time $HEALTH_CHECK_TIMEOUT "$endpoint/actuator/health/db" > /dev/null 2>&1; then
+            echo "WARNING: Database health check failed for $region_name"
+            return 2
+        fi
+        
+        # Check SQS connectivity
+        if ! curl -sf --max-time $HEALTH_CHECK_TIMEOUT "$endpoint/actuator/health/sqs" > /dev/null 2>&1; then
+            echo "WARNING: SQS health check failed for $region_name"
+            return 2
+        fi
+        
+        # Check Redis connectivity
+        if ! curl -sf --max-time $HEALTH_CHECK_TIMEOUT "$endpoint/actuator/health/redis" > /dev/null 2>&1; then
+            echo "WARNING: Redis health check failed for $region_name"
+            return 2
+        fi
+        
+        echo "SUCCESS: All health checks passed for $region_name"
+        return 0
+    }
+    
+    # Function to trigger failover
+    trigger_failover() {
+        local from_region=$1
+        local to_region=$2
+        
+        echo "ALERT: Triggering failover from $from_region to $to_region"
+        
+        # Update DNS records to point to secondary region
+        kubectl patch configmap multi-region-config -n eagle-services --type merge -p '{"data":{"active.region":"'$to_region'"}}'
+        
+        # Scale up secondary region services
+        kubectl scale deployment --replicas=3 -l app.kubernetes.io/component=microservice -n eagle-services
+        
+        # Send notification
+        curl -X POST "$WEBHOOK_URL" -H "Content-Type: application/json" -d '{
+            "text": "🚨 FAILOVER TRIGGERED: Switching from '$from_region' to '$to_region'",
+            "severity": "critical",
+            "timestamp": "'$(date -Iseconds)'"
+        }'
+        
+        return 0
+    }
+    
+    # Main health check loop
+    main() {
+        local primary_failures=0
+        local secondary_failures=0
+        
+        while true; do
+            # Check primary region
+            if ! check_region_health "$PRIMARY_REGION_ENDPOINT" "primary"; then
+                primary_failures=$((primary_failures + 1))
+                echo "Primary region failure count: $primary_failures"
+                
+                if [ $primary_failures -ge $FAILURE_THRESHOLD ]; then
+                    echo "Primary region failure threshold reached. Checking secondary region..."
+                    
+                    if check_region_health "$SECONDARY_REGION_ENDPOINT" "secondary"; then
+                        trigger_failover "primary" "secondary"
+                        primary_failures=0
+                    else
+                        echo "CRITICAL: Both regions are unhealthy!"
+                    fi
+                fi
+            else
+                primary_failures=0
+            fi
+            
+            # Check secondary region
+            if ! check_region_health "$SECONDARY_REGION_ENDPOINT" "secondary"; then
+                secondary_failures=$((secondary_failures + 1))
+                echo "Secondary region failure count: $secondary_failures"
+            else
+                secondary_failures=0
+            fi
+            
+            # Wait before next check
+            sleep "${HEALTH_CHECK_INTERVAL:-10}"
+        done
+    }
+    
+    # Start health checking
+    main
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cross-region-health-check
+  namespace: eagle-services
+spec:
+  schedule: "*/1 * * * *"  # Run every minute
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: health-checker
+            image: curlimages/curl:latest
+            command:
+            - /bin/sh
+            - -c
+            - |
+              # Source the health check script
+              source /config/health-check-script.sh
+              
+              # Run health checks
+              main
+            env:
+            - name: PRIMARY_REGION_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: multi-region-config
+                  key: primary.endpoint
+            - name: SECONDARY_REGION_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: multi-region-config
+                  key: secondary.endpoint
+            - name: HEALTH_CHECK_TIMEOUT
+              valueFrom:
+                configMapKeyRef:
+                  name: disaster-recovery-config
+                  key: health.check.timeout
+            - name: FAILURE_THRESHOLD
+              valueFrom:
+                configMapKeyRef:
+                  name: disaster-recovery-config
+                  key: health.check.failure.threshold
+            - name: HEALTH_CHECK_INTERVAL
+              valueFrom:
+                configMapKeyRef:
+                  name: disaster-recovery-config
+                  key: health.check.interval
+            - name: WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: notification-secrets
+                  key: webhook-url
+            volumeMounts:
+            - name: health-check-config
+              mountPath: /config
+              readOnly: true
+            resources:
+              requests:
+                memory: "64Mi"
+                cpu: "50m"
+              limits:
+                memory: "128Mi"
+                cpu: "100m"
+          volumes:
+          - name: health-check-config
+            configMap:
+              name: health-check-config
+              defaultMode: 0755
+          restartPolicy: OnFailure
+          serviceAccountName: health-check-service-account
+
+---
+# Service Account for health checks
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: health-check-service-account
+  namespace: eagle-services
+
+---
+# ClusterRole for health check operations
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: health-check-role
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "patch", "update"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "deployments/scale"]
+  verbs: ["get", "list", "patch", "update"]
+- apiGroups: [""]
+  resources: ["services", "endpoints"]
+  verbs: ["get", "list"]
+
+---
+# ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: health-check-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: health-check-role
+subjects:
+- kind: ServiceAccount
+  name: health-check-service-account
+  namespace: eagle-services

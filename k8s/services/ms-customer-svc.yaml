@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ms-customer
+  namespace: eagle-services
+  labels:
+    app: ms-customer
+    component: customer-data
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8086"
+    prometheus.io/path: "/actuator/prometheus"
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 8085
+    targetPort: http
+    protocol: TCP
+  - name: management
+    port: 8086
+    targetPort: management
+    protocol: TCP
+  selector:
+    app: ms-customer
+    version: v1
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ms-customer-headless
+  namespace: eagle-services
+  labels:
+    app: ms-customer
+    component: customer-data
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+  - name: http
+    port: 8085
+    targetPort: http
+    protocol: TCP
+  selector:
+    app: ms-customer
+    version: v1

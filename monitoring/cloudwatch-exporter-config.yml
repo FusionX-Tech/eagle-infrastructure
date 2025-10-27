@@ -1,0 +1,136 @@
+region: us-east-1
+metrics:
+  # SQS Metrics
+  - aws_namespace: AWS/SQS
+    aws_metric_name: NumberOfMessagesSent
+    aws_dimensions: [QueueName]
+    aws_statistics: [Sum]
+
+  - aws_namespace: AWS/SQS
+    aws_metric_name: NumberOfMessagesReceived
+    aws_dimensions: [QueueName]
+    aws_statistics: [Sum]
+
+  - aws_namespace: AWS/SQS
+    aws_metric_name: ApproximateNumberOfMessages
+    aws_dimensions: [QueueName]
+    aws_statistics: [Average]
+
+  - aws_namespace: AWS/SQS
+    aws_metric_name: ApproximateNumberOfMessagesVisible
+    aws_dimensions: [QueueName]
+    aws_statistics: [Average]
+
+  - aws_namespace: AWS/SQS
+    aws_metric_name: ApproximateNumberOfMessagesNotVisible
+    aws_dimensions: [QueueName]
+    aws_statistics: [Average]
+
+  - aws_namespace: AWS/SQS
+    aws_metric_name: NumberOfMessagesDeleted
+    aws_dimensions: [QueueName]
+    aws_statistics: [Sum]
+
+  - aws_namespace: AWS/SQS
+    aws_metric_name: ApproximateAgeOfOldestMessage
+    aws_dimensions: [QueueName]
+    aws_statistics: [Maximum]
+
+  # ECS Metrics
+  - aws_namespace: AWS/ECS
+    aws_metric_name: CPUUtilization
+    aws_dimensions: [ServiceName, ClusterName]
+    aws_statistics: [Average, Maximum]
+
+  - aws_namespace: AWS/ECS
+    aws_metric_name: MemoryUtilization
+    aws_dimensions: [ServiceName, ClusterName]
+    aws_statistics: [Average, Maximum]
+
+  - aws_namespace: AWS/ECS
+    aws_metric_name: RunningTaskCount
+    aws_dimensions: [ServiceName, ClusterName]
+    aws_statistics: [Average]
+
+  # RDS Metrics (if using RDS)
+  - aws_namespace: AWS/RDS
+    aws_metric_name: CPUUtilization
+    aws_dimensions: [DBInstanceIdentifier]
+    aws_statistics: [Average, Maximum]
+
+  - aws_namespace: AWS/RDS
+    aws_metric_name: DatabaseConnections
+    aws_dimensions: [DBInstanceIdentifier]
+    aws_statistics: [Average, Maximum]
+
+  - aws_namespace: AWS/RDS
+    aws_metric_name: FreeableMemory
+    aws_dimensions: [DBInstanceIdentifier]
+    aws_statistics: [Average, Minimum]
+
+  - aws_namespace: AWS/RDS
+    aws_metric_name: ReadLatency
+    aws_dimensions: [DBInstanceIdentifier]
+    aws_statistics: [Average, Maximum]
+
+  - aws_namespace: AWS/RDS
+    aws_metric_name: WriteLatency
+    aws_dimensions: [DBInstanceIdentifier]
+    aws_statistics: [Average, Maximum]
+
+  # ElastiCache Metrics (if using Redis on ElastiCache)
+  - aws_namespace: AWS/ElastiCache
+    aws_metric_name: CPUUtilization
+    aws_dimensions: [CacheClusterId]
+    aws_statistics: [Average, Maximum]
+
+  - aws_namespace: AWS/ElastiCache
+    aws_metric_name: DatabaseMemoryUsagePercentage
+    aws_dimensions: [CacheClusterId]
+    aws_statistics: [Average, Maximum]
+
+  - aws_namespace: AWS/ElastiCache
+    aws_metric_name: NetworkBytesIn
+    aws_dimensions: [CacheClusterId]
+    aws_statistics: [Sum]
+
+  - aws_namespace: AWS/ElastiCache
+    aws_metric_name: NetworkBytesOut
+    aws_dimensions: [CacheClusterId]
+    aws_statistics: [Sum]
+
+  # Application Load Balancer Metrics
+  - aws_namespace: AWS/ApplicationELB
+    aws_metric_name: RequestCount
+    aws_dimensions: [LoadBalancer]
+    aws_statistics: [Sum]
+
+  - aws_namespace: AWS/ApplicationELB
+    aws_metric_name: TargetResponseTime
+    aws_dimensions: [LoadBalancer]
+    aws_statistics: [Average]
+
+  - aws_namespace: AWS/ApplicationELB
+    aws_metric_name: HTTPCode_Target_2XX_Count
+    aws_dimensions: [LoadBalancer]
+    aws_statistics: [Sum]
+
+  - aws_namespace: AWS/ApplicationELB
+    aws_metric_name: HTTPCode_Target_4XX_Count
+    aws_dimensions: [LoadBalancer]
+    aws_statistics: [Sum]
+
+  - aws_namespace: AWS/ApplicationELB
+    aws_metric_name: HTTPCode_Target_5XX_Count
+    aws_dimensions: [LoadBalancer]
+    aws_statistics: [Sum]
+
+  - aws_namespace: AWS/ApplicationELB
+    aws_metric_name: HealthyHostCount
+    aws_dimensions: [TargetGroup, LoadBalancer]
+    aws_statistics: [Average]
+
+  - aws_namespace: AWS/ApplicationELB
+    aws_metric_name: UnHealthyHostCount
+    aws_dimensions: [TargetGroup, LoadBalancer]
+    aws_statistics: [Average]

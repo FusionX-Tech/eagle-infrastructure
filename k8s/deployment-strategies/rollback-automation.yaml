@@ -1,0 +1,222 @@
+# Automated Rollback Configuration
+# This configuration includes health checks and automated rollback triggers
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rollback-config
+  namespace: eagle-services
+  labels:
+    app: eagle-services
+    component: deployment-automation
+data:
+  # Rollback thresholds and configuration
+  rollback-config.yaml: |
+    rollback:
+      # Health check thresholds for automatic rollback
+      healthChecks:
+        errorRateThreshold: 5.0  # Percentage
+        latencyThreshold: 2000   # Milliseconds
+        availabilityThreshold: 95.0  # Percentage
+        
+      # Time windows for evaluation
+      evaluationWindows:
+        initial: 300s    # 5 minutes initial evaluation
+        extended: 900s   # 15 minutes extended evaluation
+        
+      # Rollback triggers
+      triggers:
+        - name: high_error_rate
+          metric: error_rate_percentage
+          threshold: 5.0
+          duration: 120s
+          
+        - name: high_latency
+          metric: response_time_p99
+          threshold: 2000
+          duration: 180s
+          
+        - name: low_availability
+          metric: availability_percentage
+          threshold: 95.0
+          duration: 300s
+          
+        - name: circuit_breaker_open
+          metric: circuit_breaker_state
+          threshold: 1
+          duration: 60s
+          
+      # Notification settings
+      notifications:
+        slack:
+          enabled: true
+          webhook: "${SLACK_WEBHOOK_URL}"
+          channel: "#alerts-deployment"
+        email:
+          enabled: true
+          recipients: ["devops@eagle.com", "sre@eagle.com"]
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: deployment-health-monitor
+  namespace: eagle-services
+  labels:
+    app: eagle-services
+    component: deployment-monitoring
+spec:
+  schedule: "*/2 * * * *"  # Every 2 minutes
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: deployment-monitor
+          containers:
+          - name: health-monitor
+            image: eagle/deployment-monitor:latest
+            env:
+            - name: PROMETHEUS_URL
+              value: "http://prometheus:9090"
+            - name: GRAFANA_URL
+              value: "http://grafana:3000"
+            - name: NAMESPACE
+              value: "eagle-services"
+            command:
+            - /bin/sh
+            - -c
+            - |
+              #!/bin/sh
+              
+              # Health monitoring script
+              echo "Starting deployment health check..."
+              
+              # Check error rates for all services
+              for service in ms-orchestrator ms-alert ms-customer ms-transaction ms-api ms-enrichment; do
+                echo "Checking health for $service..."
+                
+                # Query Prometheus for error rate
+                error_rate=$(curl -s "${PROMETHEUS_URL}/api/v1/query?query=rate(http_requests_total{job=\"$service\",status=~\"5..\"}[5m])/rate(http_requests_total{job=\"$service\"}[5m])*100" | jq -r '.data.result[0].value[1] // "0"')
+                
+                # Query for response time P99
+                latency_p99=$(curl -s "${PROMETHEUS_URL}/api/v1/query?query=histogram_quantile(0.99,rate(http_request_duration_seconds_bucket{job=\"$service\"}[5m]))*1000" | jq -r '.data.result[0].value[1] // "0"')
+                
+                # Check thresholds
+                if [ $(echo "$error_rate > 5.0" | bc -l) -eq 1 ]; then
+                  echo "ERROR: High error rate detected for $service: $error_rate%"
+                  kubectl annotate deployment $service -n eagle-services deployment.kubernetes.io/rollback-trigger="high-error-rate-$(date +%s)"
+                fi
+                
+                if [ $(echo "$latency_p99 > 2000" | bc -l) -eq 1 ]; then
+                  echo "ERROR: High latency detected for $service: ${latency_p99}ms"
+                  kubectl annotate deployment $service -n eagle-services deployment.kubernetes.io/rollback-trigger="high-latency-$(date +%s)"
+                fi
+                
+                echo "$service - Error Rate: $error_rate%, Latency P99: ${latency_p99}ms"
+              done
+              
+              echo "Health check completed."
+            resources:
+              requests:
+                cpu: 50m
+                memory: 128Mi
+              limits:
+                cpu: 200m
+                memory: 256Mi
+          restartPolicy: OnFailure
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: deployment-monitor
+  namespace: eagle-services
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: deployment-monitor
+  namespace: eagle-services
+rules:
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get", "list", "patch", "update"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: deployment-monitor
+  namespace: eagle-services
+subjects:
+- kind: ServiceAccount
+  name: deployment-monitor
+  namespace: eagle-services
+roleRef:
+  kind: Role
+  name: deployment-monitor
+  apiGroup: rbac.authorization.k8s.io
+---
+# Rollback webhook for automated rollbacks
+apiVersion: v1
+kind: Service
+metadata:
+  name: rollback-webhook
+  namespace: eagle-services
+  labels:
+    app: rollback-webhook
+spec:
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: http
+  selector:
+    app: rollback-webhook
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rollback-webhook
+  namespace: eagle-services
+  labels:
+    app: rollback-webhook
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: rollback-webhook
+  template:
+    metadata:
+      labels:
+        app: rollback-webhook
+    spec:
+      serviceAccountName: deployment-monitor
+      containers:
+      - name: rollback-webhook
+        image: eagle/rollback-webhook:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: NAMESPACE
+          value: "eagle-services"
+        - name: PROMETHEUS_URL
+          value: "http://prometheus:9090"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10

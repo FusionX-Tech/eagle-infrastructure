@@ -1,0 +1,277 @@
+# Virtual Service para MS-Orchestrator
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: ms-orchestrator-vs
+  namespace: eagle-services
+spec:
+  hosts:
+  - ms-orchestrator
+  - ms-orchestrator.eagle-services.svc.cluster.local
+  http:
+  # Rota para criação de alertas
+  - match:
+    - uri:
+        prefix: /api/v1/alerts/create
+    route:
+    - destination:
+        host: ms-orchestrator
+        port:
+          number: 8088
+    timeout: 30s
+    retries:
+      attempts: 3
+      perTryTimeout: 10s
+      retryOn: 5xx,reset,connect-failure,refused-stream
+  
+  # Rota para consulta de status
+  - match:
+    - uri:
+        prefix: /api/v1/alerts/process
+    route:
+    - destination:
+        host: ms-orchestrator
+        port:
+          number: 8088
+    timeout: 15s
+    retries:
+      attempts: 2
+      perTryTimeout: 5s
+  
+  # Rota para health checks
+  - match:
+    - uri:
+        prefix: /actuator/health
+    route:
+    - destination:
+        host: ms-orchestrator
+        port:
+          number: 8088
+    timeout: 5s
+---
+# Virtual Service para MS-Alert
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: ms-alert-vs
+  namespace: eagle-services
+spec:
+  hosts:
+  - ms-alert
+  - ms-alert.eagle-services.svc.cluster.local
+  http:
+  # Rota para operações de alertas
+  - match:
+    - uri:
+        prefix: /api/v1/alerts
+    route:
+    - destination:
+        host: ms-alert
+        port:
+          number: 8083
+    timeout: 20s
+    retries:
+      attempts: 3
+      perTryTimeout: 7s
+      retryOn: 5xx,reset,connect-failure,refused-stream
+  
+  # Rota para health checks
+  - match:
+    - uri:
+        prefix: /actuator/health
+    route:
+    - destination:
+        host: ms-alert
+        port:
+          number: 8083
+    timeout: 5s
+---
+# Virtual Service para MS-Customer
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: ms-customer-vs
+  namespace: eagle-services
+spec:
+  hosts:
+  - ms-customer
+  - ms-customer.eagle-services.svc.cluster.local
+  http:
+  # Rota para dados de clientes
+  - match:
+    - uri:
+        prefix: /api/v1/customers
+    route:
+    - destination:
+        host: ms-customer
+        port:
+          number: 8085
+    timeout: 15s
+    retries:
+      attempts: 2
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure,refused-stream
+  
+  # Rota para enriquecimento
+  - match:
+    - uri:
+        prefix: /api/v1/enrichment
+    route:
+    - destination:
+        host: ms-customer
+        port:
+          number: 8085
+    timeout: 10s
+    retries:
+      attempts: 2
+      perTryTimeout: 3s
+  
+  # Rota para health checks
+  - match:
+    - uri:
+        prefix: /actuator/health
+    route:
+    - destination:
+        host: ms-customer
+        port:
+          number: 8085
+    timeout: 5s
+---
+# Virtual Service para MS-Transaction
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: ms-transaction-vs
+  namespace: eagle-services
+spec:
+  hosts:
+  - ms-transaction
+  - ms-transaction.eagle-services.svc.cluster.local
+  http:
+  # Rota para dados transacionais
+  - match:
+    - uri:
+        prefix: /api/v1/transactions
+    route:
+    - destination:
+        host: ms-transaction
+        port:
+          number: 8086
+    timeout: 25s
+    retries:
+      attempts: 2
+      perTryTimeout: 10s
+      retryOn: 5xx,reset,connect-failure,refused-stream
+  
+  # Rota para análises
+  - match:
+    - uri:
+        prefix: /api/v1/analysis
+    route:
+    - destination:
+        host: ms-transaction
+        port:
+          number: 8086
+    timeout: 30s
+    retries:
+      attempts: 2
+      perTryTimeout: 12s
+  
+  # Rota para health checks
+  - match:
+    - uri:
+        prefix: /actuator/health
+    route:
+    - destination:
+        host: ms-transaction
+        port:
+          number: 8086
+    timeout: 5s
+---
+# Virtual Service para MS-API
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: ms-api-vs
+  namespace: eagle-services
+spec:
+  hosts:
+  - ms-api
+  - ms-api.eagle-services.svc.cluster.local
+  http:
+  # Rota para APIs externas
+  - match:
+    - uri:
+        prefix: /api/v1/external
+    route:
+    - destination:
+        host: ms-api
+        port:
+          number: 8087
+    timeout: 45s
+    retries:
+      attempts: 3
+      perTryTimeout: 15s
+      retryOn: 5xx,reset,connect-failure,refused-stream,gateway-error
+  
+  # Rota para cache
+  - match:
+    - uri:
+        prefix: /api/v1/cache
+    route:
+    - destination:
+        host: ms-api
+        port:
+          number: 8087
+    timeout: 10s
+    retries:
+      attempts: 2
+      perTryTimeout: 3s
+  
+  # Rota para health checks
+  - match:
+    - uri:
+        prefix: /actuator/health
+    route:
+    - destination:
+        host: ms-api
+        port:
+          number: 8087
+    timeout: 5s
+---
+# Virtual Service para MS-Enrichment
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: ms-enrichment-vs
+  namespace: eagle-services
+spec:
+  hosts:
+  - ms-enrichment
+  - ms-enrichment.eagle-services.svc.cluster.local
+  http:
+  # Rota para enriquecimento
+  - match:
+    - uri:
+        prefix: /api/v1/enrichment
+    route:
+    - destination:
+        host: ms-enrichment
+        port:
+          number: 8082
+    timeout: 60s
+    retries:
+      attempts: 2
+      perTryTimeout: 25s
+      retryOn: 5xx,reset,connect-failure,refused-stream
+  
+  # Rota para health checks
+  - match:
+    - uri:
+        prefix: /actuator/health
+    route:
+    - destination:
+        host: ms-enrichment
+        port:
+          number: 8082
+    timeout: 5s

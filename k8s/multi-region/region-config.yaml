@@ -1,0 +1,60 @@
+# Multi-Region Configuration for Eagle Alert System
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: multi-region-config
+  namespace: eagle-services
+data:
+  # Primary region configuration
+  primary.region: "us-east-1"
+  primary.zone: "us-east-1a"
+  primary.endpoint: "https://api-primary.eagle.com"
+  
+  # Secondary region configuration
+  secondary.region: "us-west-2"
+  secondary.zone: "us-west-2a"
+  secondary.endpoint: "https://api-secondary.eagle.com"
+  
+  # Failover configuration
+  failover.enabled: "true"
+  failover.threshold: "30s"
+  failover.healthcheck.interval: "10s"
+  
+  # Data replication settings
+  replication.mode: "async"
+  replication.lag.max: "5s"
+  replication.retry.attempts: "3"
+  
+  # Cross-region networking
+  cross.region.vpn.enabled: "true"
+  cross.region.encryption: "true"
+  
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: disaster-recovery-config
+  namespace: eagle-services
+data:
+  # RTO (Recovery Time Objective) - Maximum acceptable downtime
+  rto.target: "15m"
+  rto.critical: "5m"
+  
+  # RPO (Recovery Point Objective) - Maximum acceptable data loss
+  rpo.target: "1m"
+  rpo.critical: "30s"
+  
+  # Backup configuration
+  backup.frequency: "15m"
+  backup.retention: "30d"
+  backup.compression: "true"
+  
+  # Health check configuration
+  health.check.timeout: "30s"
+  health.check.interval: "10s"
+  health.check.failure.threshold: "3"
+  
+  # Automated failover
+  auto.failover.enabled: "true"
+  auto.failover.confirmation.required: "false"
+  manual.failover.enabled: "true"

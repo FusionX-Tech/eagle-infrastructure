@@ -1,0 +1,235 @@
+# Configuração global de sidecar para o namespace eagle-services
+apiVersion: networking.istio.io/v1beta1
+kind: Sidecar
+metadata:
+  name: default
+  namespace: eagle-services
+spec:
+  # Aplicar a todos os workloads no namespace
+  workloadSelector: {}
+  
+  # Configuração de ingress (tráfego de entrada)
+  ingress:
+  - port:
+      number: 8080
+      protocol: HTTP
+      name: http
+    defaultEndpoint: 127.0.0.1:8080
+  - port:
+      number: 8081
+      protocol: HTTP
+      name: http-alt-1
+    defaultEndpoint: 127.0.0.1:8081
+  - port:
+      number: 8082
+      protocol: HTTP
+      name: http-alt-2
+    defaultEndpoint: 127.0.0.1:8082
+  - port:
+      number: 8083
+      protocol: HTTP
+      name: http-alt-3
+    defaultEndpoint: 127.0.0.1:8083
+  - port:
+      number: 8085
+      protocol: HTTP
+      name: http-alt-5
+    defaultEndpoint: 127.0.0.1:8085
+  - port:
+      number: 8086
+      protocol: HTTP
+      name: http-alt-6
+    defaultEndpoint: 127.0.0.1:8086
+  - port:
+      number: 8087
+      protocol: HTTP
+      name: http-alt-7
+    defaultEndpoint: 127.0.0.1:8087
+  - port:
+      number: 8088
+      protocol: HTTP
+      name: http-alt-8
+    defaultEndpoint: 127.0.0.1:8088
+  
+  # Configuração de egress (tráfego de saída)
+  egress:
+  # Permitir acesso a serviços no mesmo namespace
+  - hosts:
+    - "./ms-orchestrator.eagle-services.svc.cluster.local"
+    - "./ms-alert.eagle-services.svc.cluster.local"
+    - "./ms-customer.eagle-services.svc.cluster.local"
+    - "./ms-transaction.eagle-services.svc.cluster.local"
+    - "./ms-api.eagle-services.svc.cluster.local"
+    - "./ms-enrichment.eagle-services.svc.cluster.local"
+  
+  # Permitir acesso a serviços de infraestrutura
+  - hosts:
+    - "postgres.default.svc.cluster.local"
+    - "postgres-replica-1.default.svc.cluster.local"
+    - "postgres-replica-2.default.svc.cluster.local"
+    - "redis-master.default.svc.cluster.local"
+    - "redis-replica.default.svc.cluster.local"
+    - "keycloak.default.svc.cluster.local"
+    - "vault.default.svc.cluster.local"
+    - "localstack.default.svc.cluster.local"
+    - "kong.default.svc.cluster.local"
+  
+  # Permitir acesso a serviços do Istio
+  - hosts:
+    - "istio-system/*"
+  
+  # Permitir acesso a APIs externas
+  - hosts:
+    - "api.portaldatransparencia.gov.br"
+    - "www.portaldatransparencia.gov.br"
+  
+  # Permitir acesso a serviços do sistema
+  - hosts:
+    - "kube-system/*"
+    - "pool.ntp.org"
+    - "time.google.com"
+---
+# Configuração específica de sidecar para MS-Orchestrator
+apiVersion: networking.istio.io/v1beta1
+kind: Sidecar
+metadata:
+  name: ms-orchestrator-sidecar
+  namespace: eagle-services
+spec:
+  workloadSelector:
+    labels:
+      app: ms-orchestrator
+  
+  ingress:
+  - port:
+      number: 8088
+      protocol: HTTP
+      name: http
+    defaultEndpoint: 127.0.0.1:8088
+  
+  egress:
+  # MS-Orchestrator precisa acessar MS-Alert
+  - hosts:
+    - "./ms-alert.eagle-services.svc.cluster.local"
+  
+  # Acesso a serviços de infraestrutura
+  - hosts:
+    - "postgres.default.svc.cluster.local"
+    - "redis-master.default.svc.cluster.local"
+    - "keycloak.default.svc.cluster.local"
+    - "vault.default.svc.cluster.local"
+    - "localstack.default.svc.cluster.local"
+  
+  # Acesso ao Istio system
+  - hosts:
+    - "istio-system/*"
+---
+# Configuração específica de sidecar para MS-Alert
+apiVersion: networking.istio.io/v1beta1
+kind: Sidecar
+metadata:
+  name: ms-alert-sidecar
+  namespace: eagle-services
+spec:
+  workloadSelector:
+    labels:
+      app: ms-alert
+  
+  ingress:
+  - port:
+      number: 8083
+      protocol: HTTP
+      name: http
+    defaultEndpoint: 127.0.0.1:8083
+  
+  egress:
+  # MS-Alert precisa acessar MS-Customer e MS-Orchestrator
+  - hosts:
+    - "./ms-customer.eagle-services.svc.cluster.local"
+    - "./ms-orchestrator.eagle-services.svc.cluster.local"
+  
+  # Acesso a serviços de infraestrutura
+  - hosts:
+    - "postgres.default.svc.cluster.local"
+    - "redis-master.default.svc.cluster.local"
+    - "keycloak.default.svc.cluster.local"
+    - "vault.default.svc.cluster.local"
+    - "localstack.default.svc.cluster.local"
+  
+  # Acesso ao Istio system
+  - hosts:
+    - "istio-system/*"
+---
+# Configuração específica de sidecar para MS-Enrichment
+apiVersion: networking.istio.io/v1beta1
+kind: Sidecar
+metadata:
+  name: ms-enrichment-sidecar
+  namespace: eagle-services
+spec:
+  workloadSelector:
+    labels:
+      app: ms-enrichment
+  
+  ingress:
+  - port:
+      number: 8082
+      protocol: HTTP
+      name: http
+    defaultEndpoint: 127.0.0.1:8082
+  
+  egress:
+  # MS-Enrichment precisa acessar todos os microserviços de dados
+  - hosts:
+    - "./ms-customer.eagle-services.svc.cluster.local"
+    - "./ms-transaction.eagle-services.svc.cluster.local"
+    - "./ms-api.eagle-services.svc.cluster.local"
+    - "./ms-alert.eagle-services.svc.cluster.local"
+  
+  # Acesso a serviços de infraestrutura
+  - hosts:
+    - "postgres.default.svc.cluster.local"
+    - "redis-master.default.svc.cluster.local"
+    - "keycloak.default.svc.cluster.local"
+    - "vault.default.svc.cluster.local"
+    - "localstack.default.svc.cluster.local"
+  
+  # Acesso ao Istio system
+  - hosts:
+    - "istio-system/*"
+---
+# Configuração específica de sidecar para MS-API
+apiVersion: networking.istio.io/v1beta1
+kind: Sidecar
+metadata:
+  name: ms-api-sidecar
+  namespace: eagle-services
+spec:
+  workloadSelector:
+    labels:
+      app: ms-api
+  
+  ingress:
+  - port:
+      number: 8087
+      protocol: HTTP
+      name: http
+    defaultEndpoint: 127.0.0.1:8087
+  
+  egress:
+  # MS-API precisa acessar APIs externas
+  - hosts:
+    - "api.portaldatransparencia.gov.br"
+    - "www.portaldatransparencia.gov.br"
+  
+  # Acesso a serviços de infraestrutura
+  - hosts:
+    - "postgres.default.svc.cluster.local"
+    - "redis-master.default.svc.cluster.local"
+    - "keycloak.default.svc.cluster.local"
+    - "vault.default.svc.cluster.local"
+    - "localstack.default.svc.cluster.local"
+  
+  # Acesso ao Istio system
+  - hosts:
+    - "istio-system/*"

@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ms-alert
+  namespace: eagle-services
+  labels:
+    app: ms-alert
+    component: alert-management
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8083"
+    prometheus.io/path: "/actuator/prometheus"
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 8082
+    targetPort: http
+    protocol: TCP
+  - name: management
+    port: 8083
+    targetPort: management
+    protocol: TCP
+  selector:
+    app: ms-alert
+    version: v1
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ms-alert-headless
+  namespace: eagle-services
+  labels:
+    app: ms-alert
+    component: alert-management
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+  - name: http
+    port: 8082
+    targetPort: http
+    protocol: TCP
+  selector:
+    app: ms-alert
+    version: v1

@@ -1,0 +1,159 @@
+# Gateway principal para entrada de tráfego externo
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: eagle-gateway
+  namespace: eagle-services
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  # HTTP (desenvolvimento)
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - "eagle-api.local"
+    - "localhost"
+    - "*"
+  
+  # HTTPS (produção)
+  - port:
+      number: 443
+      name: https
+      protocol: HTTPS
+    tls:
+      mode: SIMPLE
+      credentialName: eagle-tls-secret
+    hosts:
+    - "eagle-api.local"
+    - "api.eagle.fusionx.pro"
+---
+# Gateway para métricas e monitoramento
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: eagle-monitoring-gateway
+  namespace: eagle-services
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 15090
+      name: http-monitoring
+      protocol: HTTP
+    hosts:
+    - "monitoring.eagle.local"
+    - "*"
+---
+# Virtual Service para roteamento através do Gateway
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: eagle-gateway-vs
+  namespace: eagle-services
+spec:
+  hosts:
+  - "eagle-api.local"
+  - "localhost"
+  - "api.eagle.fusionx.pro"
+  gateways:
+  - eagle-gateway
+  http:
+  # Rota para MS-Orchestrator (entrada principal)
+  - match:
+    - uri:
+        prefix: /api/v1/alerts
+    route:
+    - destination:
+        host: ms-orchestrator
+        port:
+          number: 8088
+    timeout: 30s
+    retries:
+      attempts: 3
+      perTryTimeout: 10s
+    headers:
+      request:
+        add:
+          x-forwarded-proto: https
+          x-request-id: "%REQ(x-request-id)%"
+  
+  # Rota para health checks agregados
+  - match:
+    - uri:
+        exact: /health
+    route:
+    - destination:
+        host: ms-orchestrator
+        port:
+          number: 8088
+      weight: 100
+    rewrite:
+      uri: /actuator/health
+  
+  # Rota para métricas (desenvolvimento)
+  - match:
+    - uri:
+        prefix: /metrics
+    route:
+    - destination:
+        host: ms-orchestrator
+        port:
+          number: 8088
+      weight: 100
+    rewrite:
+      uri: /actuator/prometheus
+  
+  # Rota padrão (fallback)
+  - match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: ms-orchestrator
+        port:
+          number: 8088
+    fault:
+      delay:
+        percentage:
+          value: 0.1
+        fixedDelay: 5s
+---
+# Virtual Service para monitoramento
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: eagle-monitoring-vs
+  namespace: eagle-services
+spec:
+  hosts:
+  - "monitoring.eagle.local"
+  gateways:
+  - eagle-monitoring-gateway
+  http:
+  # Rota para Prometheus metrics
+  - match:
+    - uri:
+        prefix: /stats/prometheus
+    route:
+    - destination:
+        host: ms-orchestrator
+        port:
+          number: 8088
+    rewrite:
+      uri: /actuator/prometheus
+  
+  # Rota para health checks detalhados
+  - match:
+    - uri:
+        prefix: /health
+    route:
+    - destination:
+        host: ms-orchestrator
+        port:
+          number: 8088
+    rewrite:
+      uri: /actuator/health

@@ -1,0 +1,200 @@
+# Ingress configuration for API Gateway with Istio
+# This configuration exposes the microservices through Istio Gateway
+
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: eagle-gateway
+  namespace: eagle-services
+  labels:
+    app: eagle-services
+    component: gateway
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - "api.eagle.local"
+    - "eagle-api.dev"
+    tls:
+      httpsRedirect: true
+  - port:
+      number: 443
+      name: https
+      protocol: HTTPS
+    tls:
+      mode: SIMPLE
+      credentialName: eagle-tls-secret
+    hosts:
+    - "api.eagle.local"
+    - "eagle-api.dev"
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: eagle-api-routes
+  namespace: eagle-services
+  labels:
+    app: eagle-services
+    component: routing
+spec:
+  hosts:
+  - "api.eagle.local"
+  - "eagle-api.dev"
+  gateways:
+  - eagle-gateway
+  http:
+  # MS-Orchestrator routes (main API entry point)
+  - match:
+    - uri:
+        prefix: /api/v1/alerts
+    route:
+    - destination:
+        host: ms-orchestrator
+        port:
+          number: 8080
+    timeout: 30s
+    retries:
+      attempts: 3
+      perTryTimeout: 10s
+      retryOn: 5xx,reset,connect-failure,refused-stream
+    headers:
+      request:
+        add:
+          x-forwarded-proto: https
+          x-request-id: "%REQ(x-request-id)%"
+      response:
+        add:
+          x-content-type-options: nosniff
+          x-frame-options: DENY
+          x-xss-protection: "1; mode=block"
+  
+  # MS-Alert direct routes (for internal services)
+  - match:
+    - uri:
+        prefix: /internal/alerts
+    - headers:
+        x-internal-service:
+          exact: "true"
+    route:
+    - destination:
+        host: ms-alert
+        port:
+          number: 8082
+    timeout: 30s
+    
+  # MS-Customer direct routes (for internal services)
+  - match:
+    - uri:
+        prefix: /internal/customers
+    - headers:
+        x-internal-service:
+          exact: "true"
+    route:
+    - destination:
+        host: ms-customer
+        port:
+          number: 8085
+    timeout: 30s
+    
+  # Health check routes (public)
+  - match:
+    - uri:
+        prefix: /health
+    route:
+    - destination:
+        host: ms-orchestrator
+        port:
+          number: 8081
+      weight: 100
+    timeout: 10s
+    
+  # Metrics routes (internal only)
+  - match:
+    - uri:
+        prefix: /metrics
+    - headers:
+        x-monitoring-token:
+          exact: "${MONITORING_TOKEN}"
+    route:
+    - destination:
+        host: ms-orchestrator
+        port:
+          number: 8081
+    timeout: 10s
+    
+  # Default route (404)
+  - route:
+    - destination:
+        host: ms-orchestrator
+        port:
+          number: 8080
+    fault:
+      abort:
+        percentage:
+          value: 100
+        httpStatus: 404
+---
+# Rate limiting configuration
+apiVersion: networking.istio.io/v1beta1
+kind: EnvoyFilter
+metadata:
+  name: rate-limit-filter
+  namespace: eagle-services
+spec:
+  workloadSelector:
+    labels:
+      app: istio-proxy
+  configPatches:
+  - applyTo: HTTP_FILTER
+    match:
+      context: SIDECAR_INBOUND
+      listener:
+        filterChain:
+          filter:
+            name: "envoy.filters.network.http_connection_manager"
+    patch:
+      operation: INSERT_BEFORE
+      value:
+        name: envoy.filters.http.local_ratelimit
+        typed_config:
+          "@type": type.googleapis.com/udpa.type.v1.TypedStruct
+          type_url: type.googleapis.com/envoy.extensions.filters.http.local_ratelimit.v3.LocalRateLimit
+          value:
+            stat_prefix: local_rate_limiter
+            token_bucket:
+              max_tokens: 1000
+              tokens_per_fill: 100
+              fill_interval: 60s
+            filter_enabled:
+              runtime_key: local_rate_limit_enabled
+              default_value:
+                numerator: 100
+                denominator: HUNDRED
+            filter_enforced:
+              runtime_key: local_rate_limit_enforced
+              default_value:
+                numerator: 100
+                denominator: HUNDRED
+            response_headers_to_add:
+            - append: false
+              header:
+                key: x-local-rate-limit
+                value: 'true'
+---
+# TLS Certificate (placeholder - replace with real certificate)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: eagle-tls-secret
+  namespace: istio-system
+type: kubernetes.io/tls
+data:
+  # Base64 encoded certificate and key
+  # Replace with real certificate in production
+  tls.crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0t...
+  tls.key: LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0t...

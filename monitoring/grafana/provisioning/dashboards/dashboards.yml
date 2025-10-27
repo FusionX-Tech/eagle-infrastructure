@@ -1,0 +1,68 @@
+apiVersion: 1
+
+providers:
+  # System dashboards
+  - name: 'eagle-system'
+    orgId: 1
+    folder: 'Eagle System'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/system
+
+  # Business dashboards
+  - name: 'eagle-business'
+    orgId: 1
+    folder: 'Eagle Business'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/business
+
+  # Infrastructure dashboards
+  - name: 'eagle-infrastructure'
+    orgId: 1
+    folder: 'Eagle Infrastructure'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/infrastructure
+
+  # Tracing dashboards
+  - name: 'eagle-tracing'
+    orgId: 1
+    folder: 'Eagle Tracing'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/tracing
+
+  # Frontend dashboards
+  - name: 'eagle-frontend'
+    orgId: 1
+    folder: 'Eagle Frontend'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/frontend
+
+  # Root level dashboards
+  - name: 'eagle-overview'
+    orgId: 1
+    folder: ''
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards

@@ -1,0 +1,193 @@
+# Configuração de telemetria para o namespace eagle-services
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: eagle-telemetry
+  namespace: eagle-services
+spec:
+  # Configuração de métricas
+  metrics:
+  - providers:
+    - name: prometheus
+  - overrides:
+    - match:
+        metric: ALL_METRICS
+      tagOverrides:
+        # Adicionar tags customizadas
+        service_name:
+          value: "%{ENVIRONMENT_VARIABLE:SERVICE_NAME}"
+        service_version:
+          value: "%{ENVIRONMENT_VARIABLE:SERVICE_VERSION}"
+        business_domain:
+          value: "alert-system"
+  
+  # Configuração de access logs
+  accessLogging:
+  - providers:
+    - name: otel
+  - filter:
+      expression: 'response.code >= 400'
+  
+  # Configuração de tracing
+  tracing:
+  - providers:
+    - name: jaeger
+  - customTags:
+      # Tags customizadas para tracing
+      customer_document:
+        header:
+          name: "x-customer-document"
+      alert_id:
+        header:
+          name: "x-alert-id"
+      process_id:
+        header:
+          name: "x-process-id"
+      request_source:
+        header:
+          name: "x-request-source"
+---
+# Configuração específica de métricas para MS-Orchestrator
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: ms-orchestrator-metrics
+  namespace: eagle-services
+spec:
+  selector:
+    matchLabels:
+      app: ms-orchestrator
+  metrics:
+  - providers:
+    - name: prometheus
+  - overrides:
+    - match:
+        metric: requests_total
+      tagOverrides:
+        operation_type:
+          value: |
+            has(request.url_path) ? (
+              request.url_path | startsWith("/api/v1/alerts/create") ? "create_alert" :
+              request.url_path | startsWith("/api/v1/alerts/process") ? "check_status" :
+              "other"
+            ) : "unknown"
+---
+# Configuração específica de métricas para MS-Alert
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: ms-alert-metrics
+  namespace: eagle-services
+spec:
+  selector:
+    matchLabels:
+      app: ms-alert
+  metrics:
+  - providers:
+    - name: prometheus
+  - overrides:
+    - match:
+        metric: requests_total
+      tagOverrides:
+        alert_operation:
+          value: |
+            has(request.url_path) ? (
+              request.url_path | contains("/create") ? "create" :
+              request.url_path | contains("/update") ? "update" :
+              request.url_path | contains("/enrich") ? "enrich" :
+              "other"
+            ) : "unknown"
+---
+# Configuração específica de métricas para MS-Enrichment
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: ms-enrichment-metrics
+  namespace: eagle-services
+spec:
+  selector:
+    matchLabels:
+      app: ms-enrichment
+  metrics:
+  - providers:
+    - name: prometheus
+  - overrides:
+    - match:
+        metric: requests_total
+      tagOverrides:
+        enrichment_type:
+          value: |
+            has(request.url_path) ? (
+              request.url_path | contains("/customer") ? "customer_data" :
+              request.url_path | contains("/transaction") ? "transaction_data" :
+              request.url_path | contains("/external") ? "external_data" :
+              "other"
+            ) : "unknown"
+---
+# Configuração de access logs estruturados
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: eagle-access-logs
+  namespace: eagle-services
+spec:
+  accessLogging:
+  - providers:
+    - name: otel
+  - format:
+      labels:
+        timestamp: "%START_TIME%"
+        method: "%REQ(:METHOD)%"
+        path: "%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%"
+        protocol: "%PROTOCOL%"
+        response_code: "%RESPONSE_CODE%"
+        response_flags: "%RESPONSE_FLAGS%"
+        bytes_received: "%BYTES_RECEIVED%"
+        bytes_sent: "%BYTES_SENT%"
+        duration: "%DURATION%"
+        upstream_service_time: "%RESP(X-ENVOY-UPSTREAM-SERVICE-TIME)%"
+        x_forwarded_for: "%REQ(X-FORWARDED-FOR)%"
+        user_agent: "%REQ(USER-AGENT)%"
+        request_id: "%REQ(X-REQUEST-ID)%"
+        authority: "%REQ(:AUTHORITY)%"
+        upstream_host: "%UPSTREAM_HOST%"
+        upstream_cluster: "%UPSTREAM_CLUSTER%"
+        upstream_local_address: "%UPSTREAM_LOCAL_ADDRESS%"
+        downstream_local_address: "%DOWNSTREAM_LOCAL_ADDRESS%"
+        downstream_remote_address: "%DOWNSTREAM_REMOTE_ADDRESS%"
+        requested_server_name: "%REQUESTED_SERVER_NAME%"
+        # Campos customizados do negócio
+        customer_document: "%REQ(X-CUSTOMER-DOCUMENT)%"
+        alert_id: "%REQ(X-ALERT-ID)%"
+        process_id: "%REQ(X-PROCESS-ID)%"
+        service_name: "%REQ(X-SERVICE-NAME)%"
+---
+# Configuração de sampling de tracing
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: eagle-tracing-sampling
+  namespace: eagle-services
+spec:
+  tracing:
+  - providers:
+    - name: jaeger
+  # Sampling rate: 100% para desenvolvimento, 1% para produção
+  - randomSamplingPercentage: 100.0
+  - customTags:
+      # Correlation ID para rastreamento end-to-end
+      correlation_id:
+        header:
+          name: "x-correlation-id"
+      # Informações do usuário
+      user_id:
+        header:
+          name: "x-user-id"
+      # Informações da sessão
+      session_id:
+        header:
+          name: "x-session-id"
+      # Informações do tenant (se multi-tenant)
+      tenant_id:
+        header:
+          name: "x-tenant-id"

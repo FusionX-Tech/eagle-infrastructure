@@ -1,0 +1,561 @@
+# PostgreSQL Multi-Region Streaming Replication Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-replication-config
+  namespace: eagle-services
+data:
+  postgresql-primary.conf: |
+    # Primary PostgreSQL configuration for multi-region replication
+    
+    # Connection settings
+    listen_addresses = '*'
+    port = 5432
+    max_connections = 200
+    
+    # Memory settings
+    shared_buffers = 256MB
+    effective_cache_size = 1GB
+    work_mem = 4MB
+    maintenance_work_mem = 64MB
+    
+    # WAL settings for replication
+    wal_level = replica
+    max_wal_senders = 10
+    max_replication_slots = 10
+    wal_keep_size = 1GB
+    
+    # Archive settings
+    archive_mode = on
+    archive_command = 'test ! -f /var/lib/postgresql/archive/%f && cp %p /var/lib/postgresql/archive/%f'
+    archive_timeout = 300
+    
+    # Streaming replication settings
+    hot_standby = on
+    hot_standby_feedback = on
+    
+    # Synchronous replication for critical data
+    synchronous_standby_names = 'replica_us_west_2'
+    synchronous_commit = remote_apply
+    
+    # Logging
+    log_destination = 'stderr'
+    logging_collector = on
+    log_directory = '/var/log/postgresql'
+    log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'
+    log_rotation_age = 1d
+    log_rotation_size = 100MB
+    log_min_messages = warning
+    log_line_prefix = '%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h '
+    log_checkpoints = on
+    log_connections = on
+    log_disconnections = on
+    log_lock_waits = on
+    log_temp_files = 10MB
+    
+    # Performance tuning
+    checkpoint_completion_target = 0.9
+    wal_buffers = 16MB
+    default_statistics_target = 100
+    random_page_cost = 1.1
+    effective_io_concurrency = 200
+    
+  postgresql-replica.conf: |
+    # Replica PostgreSQL configuration for multi-region replication
+    
+    # Connection settings
+    listen_addresses = '*'
+    port = 5432
+    max_connections = 100
+    
+    # Memory settings (optimized for read workloads)
+    shared_buffers = 512MB
+    effective_cache_size = 2GB
+    work_mem = 8MB
+    maintenance_work_mem = 128MB
+    
+    # Standby settings
+    hot_standby = on
+    hot_standby_feedback = on
+    max_standby_archive_delay = 30s
+    max_standby_streaming_delay = 30s
+    
+    # Recovery settings
+    restore_command = 'cp /var/lib/postgresql/archive/%f %p'
+    recovery_target_timeline = 'latest'
+    
+    # Logging (reduced for replica)
+    log_destination = 'stderr'
+    logging_collector = on
+    log_directory = '/var/log/postgresql'
+    log_filename = 'postgresql-replica-%Y-%m-%d_%H%M%S.log'
+    log_min_messages = warning
+    log_line_prefix = '%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h '
+    
+    # Performance tuning for read workloads
+    checkpoint_completion_target = 0.9
+    wal_buffers = 16MB
+    default_statistics_target = 100
+    random_page_cost = 1.1
+    effective_io_concurrency = 200
+    
+  pg_hba_replication.conf: |
+    # PostgreSQL Client Authentication Configuration for Replication
+    
+    # TYPE  DATABASE        USER            ADDRESS                 METHOD
+    
+    # Local connections
+    local   all             all                                     trust
+    
+    # IPv4 local connections
+    host    all             all             127.0.0.1/32            md5
+    host    all             all             10.0.0.0/8              md5
+    
+    # IPv6 local connections
+    host    all             all             ::1/128                 md5
+    
+    # Replication connections
+    host    replication     replicator      10.0.0.0/8              md5
+    host    replication     replicator      172.16.0.0/12           md5
+    host    replication     replicator      192.168.0.0/16          md5
+    
+    # Cross-region replication (adjust CIDR blocks for your VPC setup)
+    host    replication     replicator      10.1.0.0/16             md5  # US-East-1
+    host    replication     replicator      10.2.0.0/16             md5  # US-West-2
+    
+  setup-replication.sh: |
+    #!/bin/bash
+    set -e
+    
+    echo "Setting up PostgreSQL streaming replication..."
+    
+    # Environment variables
+    POSTGRES_USER=${POSTGRES_USER:-postgres}
+    POSTGRES_DB=${POSTGRES_DB:-eagle_db}
+    REPLICATION_USER=${POSTGRES_REPLICATION_USER:-replicator}
+    REPLICATION_PASSWORD=${POSTGRES_REPLICATION_PASSWORD:-repl_password}
+    PRIMARY_HOST=${PRIMARY_HOST:-postgres-primary}
+    
+    # Create replication user on primary
+    if [ "$POSTGRES_ROLE" = "primary" ]; then
+        echo "Configuring primary server..."
+        
+        # Create replication user
+        psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+            CREATE USER $REPLICATION_USER REPLICATION LOGIN CONNECTION LIMIT 10 ENCRYPTED PASSWORD '$REPLICATION_PASSWORD';
+            SELECT pg_create_physical_replication_slot('replica_us_west_2');
+            SELECT pg_create_physical_replication_slot('replica_us_east_1');
+        EOSQL
+        
+        echo "Primary server configured successfully"
+        
+    elif [ "$POSTGRES_ROLE" = "replica" ]; then
+        echo "Configuring replica server..."
+        
+        # Stop PostgreSQL if running
+        pg_ctl stop -D "$PGDATA" -m fast || true
+        
+        # Remove existing data directory
+        rm -rf "$PGDATA"/*
+        
+        # Create base backup from primary
+        PGPASSWORD="$REPLICATION_PASSWORD" pg_basebackup \
+            -h "$PRIMARY_HOST" \
+            -D "$PGDATA" \
+            -U "$REPLICATION_USER" \
+            -v -P -W \
+            -S "${REPLICATION_SLOT_NAME:-replica_us_west_2}"
+        
+        # Create recovery configuration
+        cat > "$PGDATA/postgresql.auto.conf" <<-EOF
+        primary_conninfo = 'host=$PRIMARY_HOST port=5432 user=$REPLICATION_USER password=$REPLICATION_PASSWORD application_name=${REPLICATION_SLOT_NAME:-replica_us_west_2}'
+        primary_slot_name = '${REPLICATION_SLOT_NAME:-replica_us_west_2}'
+        EOF
+        
+        # Create standby signal
+        touch "$PGDATA/standby.signal"
+        
+        echo "Replica server configured successfully"
+    fi
+    
+  monitor-replication.sh: |
+    #!/bin/bash
+    
+    # Replication monitoring script
+    POSTGRES_USER=${POSTGRES_USER:-postgres}
+    POSTGRES_DB=${POSTGRES_DB:-eagle_db}
+    
+    echo "=== PostgreSQL Replication Status ==="
+    echo "Timestamp: $(date)"
+    echo
+    
+    # Check if this is primary or replica
+    IS_REPLICA=$(psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -c "SELECT pg_is_in_recovery();")
+    
+    if [ "$IS_REPLICA" = " t" ]; then
+        echo "Server Role: REPLICA"
+        echo
+        
+        # Replica lag information
+        echo "--- Replication Lag ---"
+        psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "
+        SELECT 
+            CASE 
+                WHEN pg_last_wal_receive_lsn() = pg_last_wal_replay_lsn() 
+                THEN 0 
+                ELSE EXTRACT (EPOCH FROM now() - pg_last_xact_replay_timestamp()) 
+            END AS lag_seconds,
+            pg_last_wal_receive_lsn(),
+            pg_last_wal_replay_lsn(),
+            pg_last_xact_replay_timestamp();
+        "
+        
+    else
+        echo "Server Role: PRIMARY"
+        echo
+        
+        # Replication slots status
+        echo "--- Replication Slots ---"
+        psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "
+        SELECT 
+            slot_name,
+            slot_type,
+            active,
+            pg_size_pretty(pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn)) AS replication_lag
+        FROM pg_replication_slots;
+        "
+        
+        # Connected replicas
+        echo "--- Connected Replicas ---"
+        psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "
+        SELECT 
+            client_addr,
+            application_name,
+            state,
+            pg_size_pretty(pg_wal_lsn_diff(pg_current_wal_lsn(), sent_lsn)) AS lag
+        FROM pg_stat_replication;
+        "
+    fi
+    
+    echo "=== End Replication Status ==="
+
+---
+# Secret for replication credentials
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-replication-secret
+  namespace: eagle-services
+type: Opaque
+data:
+  # Base64 encoded values
+  replication-user: cmVwbGljYXRvcg==  # replicator
+  replication-password: cmVwbF9wYXNzd29yZA==  # repl_password
+
+---
+# Primary PostgreSQL Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-primary
+  namespace: eagle-services
+  labels:
+    app: postgres
+    role: primary
+    region: us-east-1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+      role: primary
+  template:
+    metadata:
+      labels:
+        app: postgres
+        role: primary
+        region: us-east-1
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:16-alpine
+        env:
+        - name: POSTGRES_DB
+          value: "eagle_db"
+        - name: POSTGRES_USER
+          value: "postgres"
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: database-secrets
+              key: postgres-password
+        - name: POSTGRES_REPLICATION_USER
+          valueFrom:
+            secretKeyRef:
+              name: postgres-replication-secret
+              key: replication-user
+        - name: POSTGRES_REPLICATION_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-replication-secret
+              key: replication-password
+        - name: POSTGRES_ROLE
+          value: "primary"
+        - name: PGDATA
+          value: "/var/lib/postgresql/data/pgdata"
+        ports:
+        - containerPort: 5432
+          name: postgres
+        volumeMounts:
+        - name: postgres-data
+          mountPath: /var/lib/postgresql/data
+        - name: postgres-config
+          mountPath: /etc/postgresql
+        - name: postgres-archive
+          mountPath: /var/lib/postgresql/archive
+        - name: postgres-scripts
+          mountPath: /docker-entrypoint-initdb.d
+        command:
+        - docker-entrypoint.sh
+        - postgres
+        - -c
+        - config_file=/etc/postgresql/postgresql-primary.conf
+        - -c
+        - hba_file=/etc/postgresql/pg_hba_replication.conf
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - postgres
+            - -d
+            - eagle_db
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - postgres
+            - -d
+            - eagle_db
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: postgres-data
+        persistentVolumeClaim:
+          claimName: postgres-primary-pvc
+      - name: postgres-config
+        configMap:
+          name: postgres-replication-config
+      - name: postgres-archive
+        persistentVolumeClaim:
+          claimName: postgres-archive-pvc
+      - name: postgres-scripts
+        configMap:
+          name: postgres-replication-config
+          defaultMode: 0755
+
+---
+# Replica PostgreSQL Deployment (US-West-2)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-replica-west
+  namespace: eagle-services
+  labels:
+    app: postgres
+    role: replica
+    region: us-west-2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+      role: replica
+      region: us-west-2
+  template:
+    metadata:
+      labels:
+        app: postgres
+        role: replica
+        region: us-west-2
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:16-alpine
+        env:
+        - name: POSTGRES_DB
+          value: "eagle_db"
+        - name: POSTGRES_USER
+          value: "postgres"
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: database-secrets
+              key: postgres-password
+        - name: POSTGRES_REPLICATION_USER
+          valueFrom:
+            secretKeyRef:
+              name: postgres-replication-secret
+              key: replication-user
+        - name: POSTGRES_REPLICATION_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-replication-secret
+              key: replication-password
+        - name: POSTGRES_ROLE
+          value: "replica"
+        - name: PRIMARY_HOST
+          value: "postgres-primary-service"
+        - name: REPLICATION_SLOT_NAME
+          value: "replica_us_west_2"
+        - name: PGDATA
+          value: "/var/lib/postgresql/data/pgdata"
+        ports:
+        - containerPort: 5432
+          name: postgres
+        volumeMounts:
+        - name: postgres-data
+          mountPath: /var/lib/postgresql/data
+        - name: postgres-config
+          mountPath: /etc/postgresql
+        - name: postgres-scripts
+          mountPath: /docker-entrypoint-initdb.d
+        command:
+        - docker-entrypoint.sh
+        - postgres
+        - -c
+        - config_file=/etc/postgresql/postgresql-replica.conf
+        - -c
+        - hba_file=/etc/postgresql/pg_hba_replication.conf
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "300m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - postgres
+            - -d
+            - eagle_db
+          initialDelaySeconds: 60
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - postgres
+            - -d
+            - eagle_db
+          initialDelaySeconds: 30
+          periodSeconds: 5
+      volumes:
+      - name: postgres-data
+        persistentVolumeClaim:
+          claimName: postgres-replica-west-pvc
+      - name: postgres-config
+        configMap:
+          name: postgres-replication-config
+      - name: postgres-scripts
+        configMap:
+          name: postgres-replication-config
+          defaultMode: 0755
+
+---
+# Services
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-primary-service
+  namespace: eagle-services
+  labels:
+    app: postgres
+    role: primary
+spec:
+  selector:
+    app: postgres
+    role: primary
+  ports:
+  - port: 5432
+    targetPort: 5432
+    name: postgres
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-replica-west-service
+  namespace: eagle-services
+  labels:
+    app: postgres
+    role: replica
+    region: us-west-2
+spec:
+  selector:
+    app: postgres
+    role: replica
+    region: us-west-2
+  ports:
+  - port: 5432
+    targetPort: 5432
+    name: postgres
+  type: ClusterIP
+
+---
+# Persistent Volume Claims
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-primary-pvc
+  namespace: eagle-services
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Gi
+  storageClassName: gp3
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-replica-west-pvc
+  namespace: eagle-services
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Gi
+  storageClassName: gp3
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-archive-pvc
+  namespace: eagle-services
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+  storageClassName: gp3

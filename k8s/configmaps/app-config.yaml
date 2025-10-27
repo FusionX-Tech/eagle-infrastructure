@@ -1,0 +1,65 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: eagle-services
+  labels:
+    app: eagle-services
+    component: config
+data:
+  # Application configuration
+  SPRING_PROFILES_ACTIVE: "kubernetes"
+  LOGGING_LEVEL_ROOT: "INFO"
+  LOGGING_LEVEL_COM_EAGLE: "DEBUG"
+  LOGGING_PATTERN_CONSOLE: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level [%X{traceId},%X{spanId}] %logger{36} - %msg%n"
+  
+  # Keycloak configuration
+  KEYCLOAK_REALM: "eagle-dev"
+  KEYCLOAK_RESOURCE: "eagle-backend"
+  KEYCLOAK_AUTH_SERVER_URL: "http://keycloak:8080"
+  KEYCLOAK_SSL_REQUIRED: "external"
+  KEYCLOAK_PUBLIC_CLIENT: "false"
+  KEYCLOAK_VERIFY_TOKEN_AUDIENCE: "true"
+  KEYCLOAK_USE_RESOURCE_ROLE_MAPPINGS: "true"
+  KEYCLOAK_BEARER_ONLY: "true"
+  
+  # Observability
+  MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: "health,info,metrics,prometheus"
+  MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: "always"
+  MANAGEMENT_METRICS_EXPORT_PROMETHEUS_ENABLED: "true"
+  MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
+  
+  # Circuit breaker configuration
+  RESILIENCE4J_CIRCUITBREAKER_INSTANCES_DEFAULT_FAILURE_RATE_THRESHOLD: "50"
+  RESILIENCE4J_CIRCUITBREAKER_INSTANCES_DEFAULT_WAIT_DURATION_IN_OPEN_STATE: "30s"
+  RESILIENCE4J_CIRCUITBREAKER_INSTANCES_DEFAULT_SLIDING_WINDOW_SIZE: "10"
+  
+  # Retry configuration
+  RESILIENCE4J_RETRY_INSTANCES_DEFAULT_MAX_ATTEMPTS: "3"
+  RESILIENCE4J_RETRY_INSTANCES_DEFAULT_WAIT_DURATION: "1s"
+  RESILIENCE4J_RETRY_INSTANCES_DEFAULT_EXPONENTIAL_BACKOFF_MULTIPLIER: "2"
+  
+  # Timeout configuration
+  RESILIENCE4J_TIMELIMITER_INSTANCES_DEFAULT_TIMEOUT_DURATION: "30s"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config
+  namespace: eagle-services
+  labels:
+    app: eagle-services
+    component: cache
+data:
+  # Redis configuration
+  SPRING_REDIS_HOST: "redis-master"
+  SPRING_REDIS_PORT: "6379"
+  SPRING_REDIS_TIMEOUT: "2000ms"
+  SPRING_REDIS_LETTUCE_POOL_MAX_ACTIVE: "20"
+  SPRING_REDIS_LETTUCE_POOL_MAX_IDLE: "10"
+  SPRING_REDIS_LETTUCE_POOL_MIN_IDLE: "5"
+  
+  # Cache configuration
+  SPRING_CACHE_TYPE: "redis"
+  SPRING_CACHE_REDIS_TIME_TO_LIVE: "3600000"
+  SPRING_CACHE_REDIS_CACHE_NULL_VALUES: "false"

@@ -1,0 +1,182 @@
+# Canary Deployment Configuration using Istio
+# This configuration enables gradual traffic shifting for safe deployments
+
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: ms-customer-canary
+  namespace: eagle-services
+  labels:
+    app: ms-customer
+    deployment-strategy: canary
+spec:
+  hosts:
+  - ms-customer
+  http:
+  # Canary traffic routing based on headers (for testing)
+  - match:
+    - headers:
+        x-canary-user:
+          exact: "true"
+    route:
+    - destination:
+        host: ms-customer
+        subset: canary
+      weight: 100
+  # Gradual traffic shifting (configurable via weight)
+  - route:
+    - destination:
+        host: ms-customer
+        subset: stable
+      weight: 90
+    - destination:
+        host: ms-customer
+        subset: canary
+      weight: 10
+  fault:
+    delay:
+      percentage:
+        value: 0.1
+      fixedDelay: 5s
+  timeout: 30s
+  retries:
+    attempts: 3
+    perTryTimeout: 10s
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: ms-customer-canary
+  namespace: eagle-services
+  labels:
+    app: ms-customer
+    deployment-strategy: canary
+spec:
+  host: ms-customer
+  subsets:
+  - name: stable
+    labels:
+      version: v1
+      deployment-type: stable
+    trafficPolicy:
+      connectionPool:
+        tcp:
+          maxConnections: 150
+        http:
+          http1MaxPendingRequests: 75
+          maxRequestsPerConnection: 15
+      circuitBreaker:
+        consecutiveGatewayErrors: 5
+        interval: 30s
+        baseEjectionTime: 30s
+        maxEjectionPercent: 50
+      outlierDetection:
+        consecutiveGatewayErrors: 5
+        interval: 30s
+        baseEjectionTime: 30s
+        maxEjectionPercent: 50
+        minHealthPercent: 50
+  - name: canary
+    labels:
+      version: v2
+      deployment-type: canary
+    trafficPolicy:
+      connectionPool:
+        tcp:
+          maxConnections: 50
+        http:
+          http1MaxPendingRequests: 25
+          maxRequestsPerConnection: 5
+      circuitBreaker:
+        consecutiveGatewayErrors: 3
+        interval: 30s
+        baseEjectionTime: 30s
+        maxEjectionPercent: 100
+      outlierDetection:
+        consecutiveGatewayErrors: 3
+        interval: 30s
+        baseEjectionTime: 30s
+        maxEjectionPercent: 100
+        minHealthPercent: 0
+---
+# Canary deployment for MS-Transaction
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: ms-transaction-canary
+  namespace: eagle-services
+  labels:
+    app: ms-transaction
+    deployment-strategy: canary
+spec:
+  hosts:
+  - ms-transaction
+  http:
+  # Header-based routing for canary testing
+  - match:
+    - headers:
+        x-canary-user:
+          exact: "true"
+    route:
+    - destination:
+        host: ms-transaction
+        subset: canary
+      weight: 100
+  # Percentage-based traffic splitting
+  - route:
+    - destination:
+        host: ms-transaction
+        subset: stable
+      weight: 95
+    - destination:
+        host: ms-transaction
+        subset: canary
+      weight: 5
+  timeout: 60s
+  retries:
+    attempts: 3
+    perTryTimeout: 20s
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: ms-transaction-canary
+  namespace: eagle-services
+  labels:
+    app: ms-transaction
+    deployment-strategy: canary
+spec:
+  host: ms-transaction
+  subsets:
+  - name: stable
+    labels:
+      version: v1
+      deployment-type: stable
+    trafficPolicy:
+      connectionPool:
+        tcp:
+          maxConnections: 200
+        http:
+          http1MaxPendingRequests: 100
+          maxRequestsPerConnection: 20
+      circuitBreaker:
+        consecutiveGatewayErrors: 5
+        interval: 30s
+        baseEjectionTime: 30s
+        maxEjectionPercent: 50
+  - name: canary
+    labels:
+      version: v2
+      deployment-type: canary
+    trafficPolicy:
+      connectionPool:
+        tcp:
+          maxConnections: 50
+        http:
+          http1MaxPendingRequests: 25
+          maxRequestsPerConnection: 5
+      circuitBreaker:
+        consecutiveGatewayErrors: 3
+        interval: 30s
+        baseEjectionTime: 30s
+        maxEjectionPercent: 100

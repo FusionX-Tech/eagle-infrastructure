@@ -1,0 +1,365 @@
+# Network Optimization Configuration for High Throughput
+# Target: ≥5000 requests/second
+# Requirements: 7.4
+
+# Docker Compose Network Configuration
+version: '3.8'
+
+networks:
+  eagle-high-throughput:
+    driver: bridge
+    driver_opts:
+      # Optimize for high throughput
+      com.docker.network.bridge.name: eagle-br0
+      com.docker.network.bridge.enable_icc: "true"
+      com.docker.network.bridge.enable_ip_masquerade: "true"
+      com.docker.network.bridge.host_binding_ipv4: "0.0.0.0"
+      com.docker.network.driver.mtu: "1500"
+    
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.30.0.0/16
+          gateway: 172.30.0.1
+          ip_range: 172.30.1.0/24
+
+---
+# Nginx Configuration for High Throughput Load Balancing
+upstream eagle_backend {
+    # Load balancing method optimized for throughput
+    least_conn;
+    
+    # Connection keepalive
+    keepalive 64;
+    keepalive_requests 1000;
+    keepalive_timeout 60s;
+    
+    # Backend servers
+    server ms-alert:8080 max_fails=3 fail_timeout=30s weight=3;
+    server ms-customer:8081 max_fails=3 fail_timeout=30s weight=2;
+    server ms-orchestrator:8082 max_fails=3 fail_timeout=30s weight=2;
+    server ms-transaction:8083 max_fails=3 fail_timeout=30s weight=2;
+    server ms-api:8084 max_fails=3 fail_timeout=30s weight=1;
+    server ms-enrichment:8085 max_fails=3 fail_timeout=30s weight=1;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name api.eagle.local;
+    
+    # Performance optimizations
+    sendfile on;
+    tcp_nopush on;
+    tcp_nodelay on;
+    
+    # Connection settings
+    keepalive_timeout 65;
+    keepalive_requests 1000;
+    
+    # Buffer sizes
+    client_body_buffer_size 128k;
+    client_header_buffer_size 8k;
+    large_client_header_buffers 8 64k;
+    client_max_body_size 10m;
+    
+    # Timeouts
+    client_body_timeout 12;
+    client_header_timeout 12;
+    send_timeout 10;
+    
+    # Gzip compression
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_proxied any;
+    gzip_comp_level 6;
+    gzip_types
+        text/plain
+        text/css
+        text/xml
+        text/javascript
+        application/json
+        application/javascript
+        application/xml+rss
+        application/atom+xml
+        image/svg+xml;
+    
+    # Rate limiting
+    limit_req_zone $binary_remote_addr zone=api:10m rate=100r/s;
+    limit_req zone=api burst=200 nodelay;
+    
+    # Connection limiting
+    limit_conn_zone $binary_remote_addr zone=conn_limit_per_ip:10m;
+    limit_conn conn_limit_per_ip 50;
+    
+    # Proxy settings
+    proxy_buffering on;
+    proxy_buffer_size 128k;
+    proxy_buffers 4 256k;
+    proxy_busy_buffers_size 256k;
+    
+    # Proxy timeouts
+    proxy_connect_timeout 5s;
+    proxy_send_timeout 60s;
+    proxy_read_timeout 60s;
+    
+    # Proxy headers
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Connection "";
+    
+    # HTTP/1.1 for keepalive
+    proxy_http_version 1.1;
+    
+    # Main API routes
+    location /api/ {
+        proxy_pass http://eagle_backend;
+        
+        # Health check bypass
+        location /api/health {
+            access_log off;
+            proxy_pass http://eagle_backend;
+        }
+        
+        # Metrics endpoint
+        location /api/metrics {
+            access_log off;
+            proxy_pass http://eagle_backend;
+        }
+    }
+    
+    # Static content caching
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        access_log off;
+    }
+    
+    # Health check endpoint
+    location /health {
+        access_log off;
+        return 200 "healthy\n";
+        add_header Content-Type text/plain;
+    }
+}
+
+---
+# HAProxy Configuration Alternative
+global
+    daemon
+    maxconn 4096
+    log stdout local0
+    
+    # Performance tuning
+    tune.ssl.default-dh-param 2048
+    tune.bufsize 32768
+    tune.maxrewrite 8192
+    
+    # Connection tuning
+    tune.http.maxhdr 200
+    tune.http.cookielen 8192
+    
+defaults
+    mode http
+    timeout connect 5s
+    timeout client 60s
+    timeout server 60s
+    timeout http-request 10s
+    timeout http-keep-alive 2s
+    
+    # Logging
+    option httplog
+    option dontlognull
+    
+    # Performance options
+    option http-server-close
+    option redispatch
+    retries 3
+    
+    # Compression
+    compression algo gzip
+    compression type text/html text/plain text/css text/javascript application/json application/javascript
+    
+    # Health checks
+    option httpchk GET /actuator/health
+    http-check expect status 200
+
+frontend eagle_frontend
+    bind *:80
+    
+    # Rate limiting
+    stick-table type ip size 100k expire 30s store http_req_rate(10s)
+    http-request track-sc0 src
+    http-request reject if { sc_http_req_rate(0) gt 100 }
+    
+    # Request routing
+    use_backend eagle_alerts if { path_beg /api/v1/alerts }
+    use_backend eagle_customers if { path_beg /api/v1/customers }
+    use_backend eagle_orchestrator if { path_beg /api/v1/orchestrator }
+    use_backend eagle_transactions if { path_beg /api/v1/transactions }
+    use_backend eagle_api if { path_beg /api/v1/api }
+    use_backend eagle_enrichment if { path_beg /api/v1/enrichment }
+    default_backend eagle_default
+
+backend eagle_alerts
+    balance roundrobin
+    option httpchk GET /actuator/health
+    server alert1 ms-alert:8080 check maxconn 200
+    server alert2 ms-alert:8080 check maxconn 200 backup
+
+backend eagle_customers
+    balance roundrobin
+    option httpchk GET /actuator/health
+    server customer1 ms-customer:8081 check maxconn 150
+    server customer2 ms-customer:8081 check maxconn 150 backup
+
+backend eagle_orchestrator
+    balance roundrobin
+    option httpchk GET /actuator/health
+    server orchestrator1 ms-orchestrator:8082 check maxconn 150
+
+backend eagle_transactions
+    balance roundrobin
+    option httpchk GET /actuator/health
+    server transaction1 ms-transaction:8083 check maxconn 150
+
+backend eagle_api
+    balance roundrobin
+    option httpchk GET /actuator/health
+    server api1 ms-api:8084 check maxconn 100
+
+backend eagle_enrichment
+    balance roundrobin
+    option httpchk GET /actuator/health
+    server enrichment1 ms-enrichment:8085 check maxconn 100
+
+backend eagle_default
+    balance roundrobin
+    option httpchk GET /actuator/health
+    server alert1 ms-alert:8080 check maxconn 200
+    server customer1 ms-customer:8081 check maxconn 150
+    server orchestrator1 ms-orchestrator:8082 check maxconn 150
+
+---
+# System-level Network Optimizations (Linux)
+# /etc/sysctl.conf additions for high throughput
+
+# TCP settings for high throughput
+net.core.rmem_default = 262144
+net.core.rmem_max = 16777216
+net.core.wmem_default = 262144
+net.core.wmem_max = 16777216
+net.core.netdev_max_backlog = 5000
+net.core.netdev_budget = 600
+
+# TCP buffer sizes
+net.ipv4.tcp_rmem = 4096 65536 16777216
+net.ipv4.tcp_wmem = 4096 65536 16777216
+net.ipv4.tcp_mem = 786432 1048576 26777216
+
+# TCP connection settings
+net.ipv4.tcp_max_syn_backlog = 8192
+net.ipv4.tcp_syncookies = 1
+net.ipv4.tcp_tw_reuse = 1
+net.ipv4.tcp_fin_timeout = 30
+net.ipv4.tcp_keepalive_time = 1200
+net.ipv4.tcp_keepalive_probes = 7
+net.ipv4.tcp_keepalive_intvl = 30
+
+# TCP congestion control
+net.ipv4.tcp_congestion_control = bbr
+net.core.default_qdisc = fq
+
+# Connection tracking
+net.netfilter.nf_conntrack_max = 1048576
+net.netfilter.nf_conntrack_tcp_timeout_established = 7200
+
+# File descriptor limits
+fs.file-max = 1048576
+fs.nr_open = 1048576
+
+# Process limits
+kernel.pid_max = 4194304
+
+---
+# Docker Daemon Configuration for High Throughput
+# /etc/docker/daemon.json
+{
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "10m",
+    "max-file": "3"
+  },
+  "default-ulimits": {
+    "nofile": {
+      "Name": "nofile",
+      "Hard": 1048576,
+      "Soft": 1048576
+    },
+    "nproc": {
+      "Name": "nproc",
+      "Hard": 1048576,
+      "Soft": 1048576
+    }
+  },
+  "max-concurrent-downloads": 10,
+  "max-concurrent-uploads": 10,
+  "storage-driver": "overlay2",
+  "storage-opts": [
+    "overlay2.override_kernel_check=true"
+  ],
+  "experimental": false,
+  "metrics-addr": "0.0.0.0:9323",
+  "live-restore": true,
+  "userland-proxy": false,
+  "no-new-privileges": false,
+  "default-address-pools": [
+    {
+      "base": "172.30.0.0/16",
+      "size": 24
+    }
+  ]
+}
+
+---
+# JVM Network Optimization Properties
+# For application.yml or system properties
+
+# Network optimization JVM flags
+-Djava.net.preferIPv4Stack=true
+-Djava.net.useSystemProxies=false
+-Dsun.net.useExclusiveBind=false
+
+# NIO optimization
+-Djava.nio.channels.DefaultThreadPool.threadFactory=cached
+-Djava.nio.channels.DefaultThreadPool.initialSize=50
+-Djava.nio.channels.DefaultThreadPool.maxSize=200
+
+# Netty optimization
+-Dio.netty.eventLoopThreads=16
+-Dio.netty.allocator.type=pooled
+-Dio.netty.allocator.maxOrder=11
+-Dio.netty.allocator.numDirectArenas=16
+-Dio.netty.allocator.numHeapArenas=16
+-Dio.netty.allocator.pageSize=8192
+-Dio.netty.allocator.maxCachedBufferCapacity=32768
+-Dio.netty.allocator.cacheTrimInterval=8192
+-Dio.netty.recycler.maxCapacityPerThread=4096
+-Dio.netty.buffer.checkAccessible=false
+-Dio.netty.buffer.checkBounds=false
+
+# HTTP client optimization
+-Dhttp.keepAlive=true
+-Dhttp.maxConnections=200
+-Dhttp.maxRedirects=3
+-Dsun.net.http.allowRestrictedHeaders=true
+
+# Reactor optimization
+-Dreactor.netty.ioWorkerCount=16
+-Dreactor.netty.ioSelectCount=4
+-Dreactor.netty.pool.leasingStrategy=lifo
+-Dreactor.schedulers.defaultPoolSize=32
+-Dreactor.schedulers.defaultBoundedElasticSize=64

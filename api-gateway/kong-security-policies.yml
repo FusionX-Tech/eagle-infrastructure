@@ -1,0 +1,110 @@
+# Kong Security Policies Configuration
+_format_version: "3.0"
+
+# Additional Security Plugins
+plugins:
+  # Bot Detection
+  - name: bot-detection
+    config:
+      allow: []
+      deny: 
+        - "curl"
+        - "wget"
+        - "python-requests"
+        - "postman"
+      
+  # Request Termination for blocked IPs (can be configured dynamically)
+  - name: request-termination
+    enabled: false
+    config:
+      status_code: 403
+      content_type: "application/json"
+      body: '{"error": "Access denied", "code": "FORBIDDEN"}'
+      
+  # ACL (Access Control List) for role-based access
+  - name: acl
+    consumer: eagle-frontend
+    config:
+      allow: ["frontend", "web-client"]
+      
+  - name: acl
+    consumer: eagle-mobile
+    config:
+      allow: ["mobile", "mobile-client"]
+      
+  - name: acl
+    consumer: eagle-internal
+    config:
+      allow: ["internal", "system", "microservice"]
+
+# Additional Routes for Security
+routes:
+  # Security headers endpoint
+  - name: security-info
+    service: ms-orchestrator
+    paths: ["/api/v1/security"]
+    methods: ["GET"]
+    tags: ["security", "info"]
+
+# Security-focused Plugins per Route
+plugins:
+  # Enhanced security for alert creation
+  - name: request-validator
+    route: alert-creation
+    config:
+      version: draft4
+      body_schema: |
+        {
+          "type": "object",
+          "properties": {
+            "customerDocument": {
+              "type": "string",
+              "pattern": "^[0-9]{11}$|^[0-9]{14}$"
+            },
+            "scopeStartDate": {
+              "type": "string",
+              "format": "date"
+            },
+            "scopeEndDate": {
+              "type": "string", 
+              "format": "date"
+            }
+          },
+          "required": ["customerDocument", "scopeStartDate", "scopeEndDate"],
+          "additionalProperties": false
+        }
+      parameter_schema: []
+      
+  # Request/Response logging for audit
+  - name: http-log
+    route: alert-creation
+    config:
+      http_endpoint: "http://ms-orchestrator:8088/api/v1/audit/logs"
+      method: "POST"
+      timeout: 10000
+      keepalive: 60000
+      content_type: "application/json"
+      
+  # Session management
+  - name: session
+    config:
+      storage: "redis"
+      redis:
+        host: "redis-master"
+        port: 6379
+        database: 1
+      cookie:
+        name: "eagle-session"
+        path: "/"
+        domain: ".eagle.fusionx.com.br"
+        same_site: "Strict"
+        http_only: true
+        secure: true
+        max_age: 3600
+        
+  # Request ID for tracing
+  - name: correlation-id
+    config:
+      header_name: "X-Request-ID"
+      generator: "uuid"
+      echo_downstream: true

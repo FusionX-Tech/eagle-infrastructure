@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sqs-config
+  namespace: eagle-services
+  labels:
+    app: eagle-services
+    component: messaging
+data:
+  # AWS SQS configuration
+  AWS_REGION: "us-east-1"
+  AWS_SQS_ENDPOINT: "http://localstack:4566"
+  
+  # Queue names
+  AWS_SQS_ALERT_CREATION_QUEUE: "eagle-alert-creation"
+  AWS_SQS_ALERT_ENRICHMENT_QUEUE: "eagle-alert-enrichment"
+  AWS_SQS_CUSTOMER_DATA_REQUEST_QUEUE: "eagle-customer-data-request"
+  AWS_SQS_CUSTOMER_DATA_RESPONSE_QUEUE: "eagle-customer-data-response"
+  AWS_SQS_TRANSACTION_DATA_REQUEST_QUEUE: "eagle-transaction-data-request"
+  AWS_SQS_TRANSACTION_DATA_RESPONSE_QUEUE: "eagle-transaction-data-response"
+  AWS_SQS_EXTERNAL_API_REQUEST_QUEUE: "eagle-external-api-request"
+  AWS_SQS_EXTERNAL_API_RESPONSE_QUEUE: "eagle-external-api-response"
+  AWS_SQS_DEAD_LETTER_QUEUE: "eagle-alerts-dlq"
+  
+  # SQS consumer configuration
+  AWS_SQS_MAX_NUMBER_OF_MESSAGES: "10"
+  AWS_SQS_WAIT_TIME_SECONDS: "20"
+  AWS_SQS_VISIBILITY_TIMEOUT_SECONDS: "300"
+  AWS_SQS_MESSAGE_RETENTION_PERIOD: "1209600"
+  
+  # Retry configuration
+  AWS_SQS_MAX_RECEIVE_COUNT: "3"
+  AWS_SQS_REDRIVE_DELAY_SECONDS: "900"
+  
+  # Batch processing
+  AWS_SQS_BATCH_SIZE: "10"
+  AWS_SQS_CONCURRENT_CONSUMERS: "5"
+  AWS_SQS_POLL_TIMEOUT: "10s"

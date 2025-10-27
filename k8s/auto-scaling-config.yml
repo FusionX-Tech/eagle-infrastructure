@@ -1,0 +1,628 @@
+# Kubernetes Auto-Scaling Configuration for High Throughput
+# Target: ≥5000 requests/second
+# Requirements: 7.4
+
+---
+# Horizontal Pod Autoscaler for MS-Alert
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ms-alert-hpa
+  namespace: eagle-system
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ms-alert
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+    # CPU-based scaling
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    
+    # Memory-based scaling
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+    
+    # Custom metric: requests per second
+    - type: Pods
+      pods:
+        metric:
+          name: http_requests_per_second
+        target:
+          type: AverageValue
+          averageValue: "250"  # 5000 total / 20 max pods = 250 per pod
+  
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 15
+        - type: Pods
+          value: 4
+          periodSeconds: 15
+      selectPolicy: Max
+    
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 10
+          periodSeconds: 60
+      selectPolicy: Min
+
+---
+# Horizontal Pod Autoscaler for MS-Customer
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ms-customer-hpa
+  namespace: eagle-system
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ms-customer
+  minReplicas: 2
+  maxReplicas: 15
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+    - type: Pods
+      pods:
+        metric:
+          name: http_requests_per_second
+        target:
+          type: AverageValue
+          averageValue: "200"
+  
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 15
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 10
+          periodSeconds: 60
+
+---
+# Horizontal Pod Autoscaler for MS-Orchestrator
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ms-orchestrator-hpa
+  namespace: eagle-system
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ms-orchestrator
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+    - type: Pods
+      pods:
+        metric:
+          name: http_requests_per_second
+        target:
+          type: AverageValue
+          averageValue: "300"
+
+---
+# Horizontal Pod Autoscaler for MS-Transaction
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ms-transaction-hpa
+  namespace: eagle-system
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ms-transaction
+  minReplicas: 2
+  maxReplicas: 12
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+
+---
+# Horizontal Pod Autoscaler for MS-API
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ms-api-hpa
+  namespace: eagle-system
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ms-api
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+
+---
+# Horizontal Pod Autoscaler for MS-Enrichment
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ms-enrichment-hpa
+  namespace: eagle-system
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ms-enrichment
+  minReplicas: 1
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+
+---
+# Vertical Pod Autoscaler for resource optimization
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: ms-alert-vpa
+  namespace: eagle-system
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ms-alert
+  updatePolicy:
+    updateMode: "Auto"
+  resourcePolicy:
+    containerPolicies:
+      - containerName: ms-alert
+        minAllowed:
+          cpu: 100m
+          memory: 128Mi
+        maxAllowed:
+          cpu: 2000m
+          memory: 1Gi
+        controlledResources: ["cpu", "memory"]
+
+---
+# Pod Disruption Budget for high availability
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ms-alert-pdb
+  namespace: eagle-system
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: ms-alert
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ms-customer-pdb
+  namespace: eagle-system
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: ms-customer
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ms-orchestrator-pdb
+  namespace: eagle-system
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: ms-orchestrator
+
+---
+# Network Policy for optimized traffic flow
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: eagle-throughput-network-policy
+  namespace: eagle-system
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  
+  ingress:
+    # Allow traffic from Kong Gateway
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: kong-system
+      ports:
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 8081
+        - protocol: TCP
+          port: 8082
+        - protocol: TCP
+          port: 8083
+        - protocol: TCP
+          port: 8084
+        - protocol: TCP
+          port: 8085
+    
+    # Allow internal microservice communication
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: eagle-system
+      ports:
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 8081
+        - protocol: TCP
+          port: 8082
+        - protocol: TCP
+          port: 8083
+        - protocol: TCP
+          port: 8084
+        - protocol: TCP
+          port: 8085
+  
+  egress:
+    # Allow outbound traffic to databases
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: database-system
+      ports:
+        - protocol: TCP
+          port: 5432  # PostgreSQL
+        - protocol: TCP
+          port: 6379  # Redis
+    
+    # Allow outbound traffic to external APIs
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 443
+    
+    # Allow DNS resolution
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+
+---
+# Service Monitor for Prometheus metrics collection
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: eagle-throughput-metrics
+  namespace: eagle-system
+  labels:
+    app.kubernetes.io/name: eagle-system
+    app.kubernetes.io/part-of: eagle-monitoring
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/part-of: eagle-system
+  endpoints:
+    - port: actuator
+      path: /actuator/prometheus
+      interval: 10s
+      scrapeTimeout: 5s
+      honorLabels: true
+      
+  namespaceSelector:
+    matchNames:
+      - eagle-system
+
+---
+# PrometheusRule for throughput alerting
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: eagle-throughput-alerts
+  namespace: eagle-system
+  labels:
+    app.kubernetes.io/name: eagle-system
+    app.kubernetes.io/part-of: eagle-monitoring
+spec:
+  groups:
+    - name: eagle.throughput.rules
+      interval: 10s
+      rules:
+        # High throughput alert
+        - alert: EagleThroughputHigh
+          expr: sum(rate(http_server_requests_total[1m])) > 6000
+          for: 2m
+          labels:
+            severity: info
+          annotations:
+            summary: "Eagle system throughput is very high"
+            description: "Current throughput: {{ $value }} req/s (target: ≥5000 req/s)"
+        
+        # Low throughput alert
+        - alert: EagleThroughputLow
+          expr: sum(rate(http_server_requests_total[1m])) < 4500
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Eagle system throughput below target"
+            description: "Current throughput: {{ $value }} req/s (target: ≥5000 req/s)"
+        
+        # Critical throughput alert
+        - alert: EagleThroughputCritical
+          expr: sum(rate(http_server_requests_total[1m])) < 3000
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Eagle system throughput critically low"
+            description: "Current throughput: {{ $value }} req/s (target: ≥5000 req/s)"
+        
+        # High response time alert
+        - alert: EagleResponseTimeHigh
+          expr: histogram_quantile(0.99, sum(rate(http_server_requests_duration_seconds_bucket[5m])) by (le)) > 0.1
+          for: 3m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Eagle system response time high"
+            description: "99th percentile response time: {{ $value }}s (target: ≤0.1s)"
+        
+        # High error rate alert
+        - alert: EagleErrorRateHigh
+          expr: sum(rate(http_server_requests_total{status=~"5.."}[5m])) / sum(rate(http_server_requests_total[5m])) > 0.01
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Eagle system error rate high"
+            description: "Error rate: {{ $value | humanizePercentage }} (target: ≤1%)"
+        
+        # Pod scaling alert
+        - alert: EaglePodScalingActive
+          expr: kube_horizontalpodautoscaler_status_current_replicas > kube_horizontalpodautoscaler_spec_min_replicas
+          for: 1m
+          labels:
+            severity: info
+          annotations:
+            summary: "Eagle pods are scaling up due to load"
+            description: "{{ $labels.horizontalpodautoscaler }} has {{ $value }} replicas (min: {{ $labels.spec_min_replicas }})"
+
+---
+# ConfigMap for throughput testing scripts
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: throughput-test-scripts
+  namespace: eagle-system
+data:
+  load-test.sh: |
+    #!/bin/bash
+    # Load testing script for Eagle system throughput validation
+    
+    set -e
+    
+    # Configuration
+    TARGET_RPS=${TARGET_RPS:-5000}
+    DURATION=${DURATION:-300}
+    WARMUP=${WARMUP:-60}
+    CONCURRENT_USERS=${CONCURRENT_USERS:-200}
+    BASE_URL=${BASE_URL:-"http://api.eagle.local"}
+    
+    echo "Starting Eagle throughput load test..."
+    echo "Target: ${TARGET_RPS} req/s for ${DURATION}s"
+    echo "Concurrent users: ${CONCURRENT_USERS}"
+    echo "Base URL: ${BASE_URL}"
+    echo "Warmup: ${WARMUP}s"
+    echo "=================================="
+    
+    # Check if wrk is available
+    if ! command -v wrk &> /dev/null; then
+        echo "Error: wrk load testing tool not found"
+        echo "Install with: apt-get install wrk (Ubuntu) or brew install wrk (macOS)"
+        exit 1
+    fi
+    
+    # Warmup phase
+    echo "Starting warmup phase (${WARMUP}s)..."
+    wrk -t12 -c50 -d${WARMUP}s --timeout=10s \
+        -s /scripts/eagle-test-script.lua \
+        ${BASE_URL}/api/v1/alerts
+    
+    echo "Warmup completed. Starting main load test..."
+    sleep 5
+    
+    # Main load test
+    echo "Running main throughput test..."
+    wrk -t20 -c${CONCURRENT_USERS} -d${DURATION}s --timeout=10s \
+        -s /scripts/eagle-test-script.lua \
+        --latency \
+        ${BASE_URL}/api/v1/alerts > /tmp/load-test-results.txt
+    
+    # Display results
+    echo "=================================="
+    echo "LOAD TEST RESULTS:"
+    echo "=================================="
+    cat /tmp/load-test-results.txt
+    
+    # Extract and validate throughput
+    ACTUAL_RPS=$(grep "Requests/sec:" /tmp/load-test-results.txt | awk '{print $2}' | cut -d'.' -f1)
+    
+    echo "=================================="
+    echo "THROUGHPUT VALIDATION:"
+    echo "Target: ${TARGET_RPS} req/s"
+    echo "Actual: ${ACTUAL_RPS} req/s"
+    
+    if [ "${ACTUAL_RPS}" -ge "${TARGET_RPS}" ]; then
+        echo "✅ THROUGHPUT TEST PASSED"
+        exit 0
+    else
+        echo "❌ THROUGHPUT TEST FAILED"
+        echo "Actual throughput (${ACTUAL_RPS}) below target (${TARGET_RPS})"
+        exit 1
+    fi
+  
+  eagle-test-script.lua: |
+    -- Lua script for wrk load testing with multiple endpoints
+    
+    -- Request counter
+    local counter = 0
+    
+    -- Endpoint rotation
+    local endpoints = {
+        "/api/v1/alerts",
+        "/api/v1/customers/search?document=12345678901",
+        "/api/v1/transactions/analysis",
+        "/api/v1/orchestrator/health",
+        "/api/v1/api/status"
+    }
+    
+    -- Request method
+    request = function()
+        counter = counter + 1
+        local endpoint = endpoints[(counter % #endpoints) + 1]
+        
+        -- Add authentication header if needed
+        local headers = {}
+        headers["Content-Type"] = "application/json"
+        headers["Accept"] = "application/json"
+        
+        return wrk.format("GET", endpoint, headers, nil)
+    end
+    
+    -- Response handling
+    response = function(status, headers, body)
+        if status ~= 200 then
+            print("Error response: " .. status)
+        end
+    end
+    
+    -- Test completion
+    done = function(summary, latency, requests)
+        print("Test completed:")
+        print("  Requests: " .. summary.requests)
+        print("  Duration: " .. summary.duration / 1000000 .. "s")
+        print("  Errors: " .. summary.errors.connect + summary.errors.read + summary.errors.write + summary.errors.status + summary.errors.timeout)
+        print("  Throughput: " .. summary.requests / (summary.duration / 1000000) .. " req/s")
+    end
+
+  monitor-throughput.sh: |
+    #!/bin/bash
+    # Real-time throughput monitoring script
+    
+    PROMETHEUS_URL=${PROMETHEUS_URL:-"http://prometheus:9090"}
+    INTERVAL=${INTERVAL:-10}
+    
+    echo "Monitoring Eagle system throughput..."
+    echo "Prometheus: ${PROMETHEUS_URL}"
+    echo "Update interval: ${INTERVAL}s"
+    echo "Press Ctrl+C to stop"
+    echo "=================================="
+    
+    while true; do
+        # Get current timestamp
+        timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+        
+        # Query Prometheus for throughput metrics
+        throughput=$(curl -s "${PROMETHEUS_URL}/api/v1/query?query=sum(rate(http_server_requests_total[1m]))" | \
+                    jq -r '.data.result[0].value[1] // "0"' | \
+                    cut -d'.' -f1)
+        
+        # Query for response time
+        response_time=$(curl -s "${PROMETHEUS_URL}/api/v1/query?query=histogram_quantile(0.99,sum(rate(http_server_requests_duration_seconds_bucket[5m])))" | \
+                       jq -r '.data.result[0].value[1] // "0"' | \
+                       awk '{printf "%.3f", $1}')
+        
+        # Query for error rate
+        error_rate=$(curl -s "${PROMETHEUS_URL}/api/v1/query?query=sum(rate(http_server_requests_total{status=~\"5..\"}[5m]))/sum(rate(http_server_requests_total[5m]))" | \
+                    jq -r '.data.result[0].value[1] // "0"' | \
+                    awk '{printf "%.4f", $1 * 100}')
+        
+        # Display metrics
+        printf "%s | Throughput: %s req/s | P99 Response: %ss | Error Rate: %s%%\n" \
+               "$timestamp" "$throughput" "$response_time" "$error_rate"
+        
+        sleep $INTERVAL
+    done

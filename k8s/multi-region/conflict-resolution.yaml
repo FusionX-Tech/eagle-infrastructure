@@ -1,0 +1,680 @@
+# Conflict Resolution System for Multi-Region Data Synchronization
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: conflict-resolution-config
+  namespace: eagle-services
+data:
+  conflict-resolution-rules.yaml: |
+    # Conflict Resolution Rules Configuration
+    
+    # Global settings
+    global:
+      default_strategy: "last_write_wins"
+      timestamp_precision: "microseconds"
+      conflict_detection_enabled: true
+      audit_conflicts: true
+      
+    # Entity-specific resolution strategies
+    entities:
+      alerts:
+        strategy: "merge_with_priority"
+        priority_fields:
+          - "status"
+          - "enrichment_data"
+          - "updated_at"
+        conflict_fields:
+          - "enrichment_data"
+        merge_strategy: "deep_merge"
+        
+      customers:
+        strategy: "source_priority"
+        priority_sources:
+          - "ms-customer"
+          - "external-api"
+        immutable_fields:
+          - "document"
+          - "created_at"
+        
+      transactions:
+        strategy: "immutable_append_only"
+        conflict_action: "reject_duplicate"
+        duplicate_detection:
+          - "transaction_id"
+          - "customer_document"
+          - "amount"
+          - "transaction_date"
+          
+      external_data_cache:
+        strategy: "freshness_priority"
+        ttl_seconds: 3600
+        refresh_threshold: 300
+        
+    # Conflict resolution strategies
+    strategies:
+      last_write_wins:
+        description: "Use the record with the latest timestamp"
+        implementation: "timestamp_comparison"
+        
+      merge_with_priority:
+        description: "Merge records with field-level priority"
+        implementation: "field_priority_merge"
+        
+      source_priority:
+        description: "Use source system priority"
+        implementation: "source_system_priority"
+        
+      immutable_append_only:
+        description: "Reject conflicts for immutable data"
+        implementation: "conflict_rejection"
+        
+      freshness_priority:
+        description: "Use freshest data based on TTL"
+        implementation: "ttl_based_resolution"
+        
+  conflict-detector.py: |
+    #!/usr/bin/env python3
+    """
+    Conflict Detection and Resolution Service
+    """
+    
+    import json
+    import logging
+    import hashlib
+    from datetime import datetime, timezone
+    from typing import Dict, List, Any, Optional
+    from dataclasses import dataclass
+    from enum import Enum
+    
+    class ConflictStrategy(Enum):
+        LAST_WRITE_WINS = "last_write_wins"
+        MERGE_WITH_PRIORITY = "merge_with_priority"
+        SOURCE_PRIORITY = "source_priority"
+        IMMUTABLE_APPEND_ONLY = "immutable_append_only"
+        FRESHNESS_PRIORITY = "freshness_priority"
+    
+    @dataclass
+    class ConflictRecord:
+        entity_type: str
+        entity_id: str
+        field_name: str
+        old_value: Any
+        new_value: Any
+        old_timestamp: datetime
+        new_timestamp: datetime
+        source_region: str
+        target_region: str
+        conflict_hash: str
+        
+    class ConflictResolver:
+        def __init__(self, config_path: str = "/config/conflict-resolution-rules.yaml"):
+            self.config = self._load_config(config_path)
+            self.logger = logging.getLogger(__name__)
+            
+        def _load_config(self, config_path: str) -> Dict:
+            """Load conflict resolution configuration"""
+            try:
+                with open(config_path, 'r') as f:
+                    import yaml
+                    return yaml.safe_load(f)
+            except Exception as e:
+                self.logger.error(f"Failed to load config: {e}")
+                return {}
+                
+        def detect_conflicts(self, entity_type: str, old_record: Dict, new_record: Dict) -> List[ConflictRecord]:
+            """Detect conflicts between old and new records"""
+            conflicts = []
+            
+            # Get entity configuration
+            entity_config = self.config.get('entities', {}).get(entity_type, {})
+            conflict_fields = entity_config.get('conflict_fields', [])
+            
+            # If no specific fields defined, check all fields
+            if not conflict_fields:
+                conflict_fields = set(old_record.keys()) & set(new_record.keys())
+                
+            for field in conflict_fields:
+                if field in old_record and field in new_record:
+                    if old_record[field] != new_record[field]:
+                        conflict = ConflictRecord(
+                            entity_type=entity_type,
+                            entity_id=new_record.get('id', 'unknown'),
+                            field_name=field,
+                            old_value=old_record[field],
+                            new_value=new_record[field],
+                            old_timestamp=self._parse_timestamp(old_record.get('updated_at')),
+                            new_timestamp=self._parse_timestamp(new_record.get('updated_at')),
+                            source_region=new_record.get('source_region', 'unknown'),
+                            target_region=old_record.get('source_region', 'unknown'),
+                            conflict_hash=self._generate_conflict_hash(entity_type, field, old_record, new_record)
+                        )
+                        conflicts.append(conflict)
+                        
+            return conflicts
+            
+        def resolve_conflicts(self, entity_type: str, conflicts: List[ConflictRecord], old_record: Dict, new_record: Dict) -> Dict:
+            """Resolve conflicts and return merged record"""
+            entity_config = self.config.get('entities', {}).get(entity_type, {})
+            strategy = ConflictStrategy(entity_config.get('strategy', 'last_write_wins'))
+            
+            resolved_record = old_record.copy()
+            
+            for conflict in conflicts:
+                resolved_value = self._resolve_field_conflict(conflict, strategy, entity_config)
+                resolved_record[conflict.field_name] = resolved_value
+                
+                # Log conflict resolution
+                self.logger.info(f"Resolved conflict for {entity_type}.{conflict.field_name}: "
+                               f"old={conflict.old_value} new={conflict.new_value} resolved={resolved_value}")
+                               
+            # Update metadata
+            resolved_record['updated_at'] = datetime.now(timezone.utc).isoformat()
+            resolved_record['conflict_resolved'] = True
+            resolved_record['resolution_timestamp'] = datetime.now(timezone.utc).isoformat()
+            
+            return resolved_record
+            
+        def _resolve_field_conflict(self, conflict: ConflictRecord, strategy: ConflictStrategy, entity_config: Dict) -> Any:
+            """Resolve individual field conflict based on strategy"""
+            
+            if strategy == ConflictStrategy.LAST_WRITE_WINS:
+                return conflict.new_value if conflict.new_timestamp > conflict.old_timestamp else conflict.old_value
+                
+            elif strategy == ConflictStrategy.MERGE_WITH_PRIORITY:
+                priority_fields = entity_config.get('priority_fields', [])
+                if conflict.field_name in priority_fields:
+                    return conflict.new_value
+                return conflict.old_value
+                
+            elif strategy == ConflictStrategy.SOURCE_PRIORITY:
+                priority_sources = entity_config.get('priority_sources', [])
+                if conflict.source_region in priority_sources:
+                    source_index = priority_sources.index(conflict.source_region)
+                    target_index = priority_sources.index(conflict.target_region) if conflict.target_region in priority_sources else len(priority_sources)
+                    return conflict.new_value if source_index < target_index else conflict.old_value
+                return conflict.old_value
+                
+            elif strategy == ConflictStrategy.IMMUTABLE_APPEND_ONLY:
+                # For immutable data, reject the new value and keep the old
+                self.logger.warning(f"Rejecting update to immutable field {conflict.field_name}")
+                return conflict.old_value
+                
+            elif strategy == ConflictStrategy.FRESHNESS_PRIORITY:
+                ttl_seconds = entity_config.get('ttl_seconds', 3600)
+                age_seconds = (datetime.now(timezone.utc) - conflict.old_timestamp).total_seconds()
+                return conflict.new_value if age_seconds > ttl_seconds else conflict.old_value
+                
+            # Default to last write wins
+            return conflict.new_value if conflict.new_timestamp > conflict.old_timestamp else conflict.old_value
+            
+        def _parse_timestamp(self, timestamp_str: str) -> datetime:
+            """Parse timestamp string to datetime object"""
+            if not timestamp_str:
+                return datetime.min.replace(tzinfo=timezone.utc)
+            try:
+                return datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+            except:
+                return datetime.min.replace(tzinfo=timezone.utc)
+                
+        def _generate_conflict_hash(self, entity_type: str, field: str, old_record: Dict, new_record: Dict) -> str:
+            """Generate unique hash for conflict tracking"""
+            conflict_data = f"{entity_type}:{field}:{old_record.get('id')}:{old_record.get('updated_at')}:{new_record.get('updated_at')}"
+            return hashlib.sha256(conflict_data.encode()).hexdigest()[:16]
+            
+        def audit_conflict(self, conflict: ConflictRecord, resolution: Any):
+            """Audit conflict resolution for compliance"""
+            audit_record = {
+                'timestamp': datetime.now(timezone.utc).isoformat(),
+                'entity_type': conflict.entity_type,
+                'entity_id': conflict.entity_id,
+                'field_name': conflict.field_name,
+                'old_value': str(conflict.old_value),
+                'new_value': str(conflict.new_value),
+                'resolved_value': str(resolution),
+                'source_region': conflict.source_region,
+                'target_region': conflict.target_region,
+                'conflict_hash': conflict.conflict_hash
+            }
+            
+            # Log to audit system
+            self.logger.info(f"AUDIT: {json.dumps(audit_record)}")
+            
+    if __name__ == "__main__":
+        # Example usage
+        resolver = ConflictResolver()
+        
+        # Example conflict detection and resolution
+        old_record = {
+            'id': 'alert-123',
+            'status': 'CREATED',
+            'enrichment_data': {'score': 85},
+            'updated_at': '2024-01-01T10:00:00Z',
+            'source_region': 'us-east-1'
+        }
+        
+        new_record = {
+            'id': 'alert-123',
+            'status': 'ENRICHED',
+            'enrichment_data': {'score': 92, 'risk_level': 'HIGH'},
+            'updated_at': '2024-01-01T10:05:00Z',
+            'source_region': 'us-west-2'
+        }
+        
+        conflicts = resolver.detect_conflicts('alerts', old_record, new_record)
+        if conflicts:
+            resolved_record = resolver.resolve_conflicts('alerts', conflicts, old_record, new_record)
+            print(f"Resolved record: {json.dumps(resolved_record, indent=2)}")
+            
+            # Audit each conflict
+            for conflict in conflicts:
+                resolver.audit_conflict(conflict, resolved_record[conflict.field_name])
+
+---
+# Conflict Resolution Service Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: conflict-resolution-service
+  namespace: eagle-services
+  labels:
+    app: conflict-resolution
+    component: data-sync
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: conflict-resolution
+  template:
+    metadata:
+      labels:
+        app: conflict-resolution
+        component: data-sync
+    spec:
+      containers:
+      - name: conflict-resolver
+        image: python:3.11-alpine
+        command:
+        - /bin/sh
+        - -c
+        - |
+          pip install pyyaml redis psycopg2-binary
+          python /app/conflict-detector.py
+        env:
+        - name: POSTGRES_HOST
+          value: "postgres-primary-service"
+        - name: POSTGRES_USER
+          value: "postgres"
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: database-secrets
+              key: postgres-password
+        - name: REDIS_HOST
+          value: "redis-primary-service"
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: redis-secret
+              key: password
+        - name: LOG_LEVEL
+          value: "INFO"
+        ports:
+        - containerPort: 8080
+          name: http
+        volumeMounts:
+        - name: config
+          mountPath: /config
+        - name: app
+          mountPath: /app
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: config
+        configMap:
+          name: conflict-resolution-config
+      - name: app
+        configMap:
+          name: conflict-resolution-config
+          defaultMode: 0755
+
+---
+# Conflict Resolution Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: conflict-resolution-service
+  namespace: eagle-services
+  labels:
+    app: conflict-resolution
+spec:
+  selector:
+    app: conflict-resolution
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: http
+  type: ClusterIP
+
+---
+# Data Synchronization CronJob
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: data-sync-job
+  namespace: eagle-services
+spec:
+  schedule: "*/5 * * * *"  # Run every 5 minutes
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: data-sync
+            image: python:3.11-alpine
+            command:
+            - /bin/sh
+            - -c
+            - |
+              pip install pyyaml redis psycopg2-binary requests
+              python /scripts/data-sync.py
+            env:
+            - name: PRIMARY_POSTGRES_HOST
+              value: "postgres-primary-service"
+            - name: REPLICA_POSTGRES_HOST
+              value: "postgres-replica-west-service"
+            - name: POSTGRES_USER
+              value: "postgres"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: database-secrets
+                  key: postgres-password
+            - name: REDIS_PRIMARY_HOST
+              value: "redis-primary-service"
+            - name: REDIS_REPLICA_HOST
+              value: "redis-replica-west-service"
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-secret
+                  key: password
+            - name: CONFLICT_RESOLVER_URL
+              value: "http://conflict-resolution-service:8080"
+            volumeMounts:
+            - name: sync-scripts
+              mountPath: /scripts
+            resources:
+              requests:
+                memory: "128Mi"
+                cpu: "100m"
+              limits:
+                memory: "256Mi"
+                cpu: "200m"
+          volumes:
+          - name: sync-scripts
+            configMap:
+              name: data-sync-scripts
+              defaultMode: 0755
+          restartPolicy: OnFailure
+
+---
+# Data Sync Scripts ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: data-sync-scripts
+  namespace: eagle-services
+data:
+  data-sync.py: |
+    #!/usr/bin/env python3
+    """
+    Data Synchronization Service for Multi-Region Deployment
+    """
+    
+    import os
+    import json
+    import time
+    import logging
+    import requests
+    import psycopg2
+    import redis
+    from datetime import datetime, timezone
+    from typing import Dict, List, Any
+    
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+    
+    class DataSyncService:
+        def __init__(self):
+            self.primary_db = self._connect_postgres(os.getenv('PRIMARY_POSTGRES_HOST'))
+            self.replica_db = self._connect_postgres(os.getenv('REPLICA_POSTGRES_HOST'))
+            self.primary_redis = self._connect_redis(os.getenv('REDIS_PRIMARY_HOST'))
+            self.replica_redis = self._connect_redis(os.getenv('REDIS_REPLICA_HOST'))
+            self.conflict_resolver_url = os.getenv('CONFLICT_RESOLVER_URL')
+            
+        def _connect_postgres(self, host: str):
+            """Connect to PostgreSQL database"""
+            try:
+                return psycopg2.connect(
+                    host=host,
+                    database='eagle_db',
+                    user=os.getenv('POSTGRES_USER'),
+                    password=os.getenv('POSTGRES_PASSWORD')
+                )
+            except Exception as e:
+                logger.error(f"Failed to connect to PostgreSQL at {host}: {e}")
+                return None
+                
+        def _connect_redis(self, host: str):
+            """Connect to Redis instance"""
+            try:
+                return redis.Redis(
+                    host=host,
+                    port=6379,
+                    password=os.getenv('REDIS_PASSWORD'),
+                    decode_responses=True
+                )
+            except Exception as e:
+                logger.error(f"Failed to connect to Redis at {host}: {e}")
+                return None
+                
+        def sync_database_changes(self):
+            """Synchronize database changes between regions"""
+            if not self.primary_db or not self.replica_db:
+                logger.error("Database connections not available")
+                return
+                
+            try:
+                # Get recent changes from primary
+                with self.primary_db.cursor() as cursor:
+                    cursor.execute("""
+                        SELECT table_name, operation, record_id, record_data, timestamp
+                        FROM change_log 
+                        WHERE timestamp > NOW() - INTERVAL '10 minutes'
+                        AND synced = false
+                        ORDER BY timestamp ASC
+                    """)
+                    changes = cursor.fetchall()
+                    
+                # Apply changes to replica with conflict resolution
+                for change in changes:
+                    table_name, operation, record_id, record_data, timestamp = change
+                    
+                    if operation == 'INSERT':
+                        self._sync_insert(table_name, record_data)
+                    elif operation == 'UPDATE':
+                        self._sync_update(table_name, record_id, record_data)
+                    elif operation == 'DELETE':
+                        self._sync_delete(table_name, record_id)
+                        
+                    # Mark as synced
+                    with self.primary_db.cursor() as update_cursor:
+                        update_cursor.execute(
+                            "UPDATE change_log SET synced = true WHERE record_id = %s AND timestamp = %s",
+                            (record_id, timestamp)
+                        )
+                        
+                self.primary_db.commit()
+                logger.info(f"Synchronized {len(changes)} database changes")
+                
+            except Exception as e:
+                logger.error(f"Database sync failed: {e}")
+                self.primary_db.rollback()
+                
+        def _sync_insert(self, table_name: str, record_data: Dict):
+            """Sync INSERT operation with conflict detection"""
+            try:
+                with self.replica_db.cursor() as cursor:
+                    # Check if record already exists
+                    cursor.execute(f"SELECT * FROM {table_name} WHERE id = %s", (record_data['id'],))
+                    existing = cursor.fetchone()
+                    
+                    if existing:
+                        # Conflict detected - resolve it
+                        self._resolve_conflict(table_name, existing, record_data)
+                    else:
+                        # Insert new record
+                        columns = ', '.join(record_data.keys())
+                        values = ', '.join(['%s'] * len(record_data))
+                        cursor.execute(
+                            f"INSERT INTO {table_name} ({columns}) VALUES ({values})",
+                            list(record_data.values())
+                        )
+                        
+                self.replica_db.commit()
+                
+            except Exception as e:
+                logger.error(f"Insert sync failed for {table_name}: {e}")
+                self.replica_db.rollback()
+                
+        def _sync_update(self, table_name: str, record_id: str, record_data: Dict):
+            """Sync UPDATE operation with conflict detection"""
+            try:
+                with self.replica_db.cursor() as cursor:
+                    # Get current record
+                    cursor.execute(f"SELECT * FROM {table_name} WHERE id = %s", (record_id,))
+                    existing = cursor.fetchone()
+                    
+                    if existing:
+                        # Resolve conflicts
+                        resolved_data = self._resolve_conflict(table_name, existing, record_data)
+                        
+                        # Update with resolved data
+                        set_clause = ', '.join([f"{k} = %s" for k in resolved_data.keys()])
+                        cursor.execute(
+                            f"UPDATE {table_name} SET {set_clause} WHERE id = %s",
+                            list(resolved_data.values()) + [record_id]
+                        )
+                    else:
+                        # Record doesn't exist, insert it
+                        self._sync_insert(table_name, record_data)
+                        
+                self.replica_db.commit()
+                
+            except Exception as e:
+                logger.error(f"Update sync failed for {table_name}: {e}")
+                self.replica_db.rollback()
+                
+        def _sync_delete(self, table_name: str, record_id: str):
+            """Sync DELETE operation"""
+            try:
+                with self.replica_db.cursor() as cursor:
+                    cursor.execute(f"DELETE FROM {table_name} WHERE id = %s", (record_id,))
+                    
+                self.replica_db.commit()
+                
+            except Exception as e:
+                logger.error(f"Delete sync failed for {table_name}: {e}")
+                self.replica_db.rollback()
+                
+        def _resolve_conflict(self, table_name: str, existing_record: tuple, new_record: Dict) -> Dict:
+            """Resolve conflicts using conflict resolution service"""
+            try:
+                # Convert existing record to dict (assuming column names match)
+                existing_dict = dict(zip([desc[0] for desc in self.replica_db.description], existing_record))
+                
+                # Call conflict resolution service
+                response = requests.post(
+                    f"{self.conflict_resolver_url}/resolve",
+                    json={
+                        'entity_type': table_name,
+                        'old_record': existing_dict,
+                        'new_record': new_record
+                    },
+                    timeout=30
+                )
+                
+                if response.status_code == 200:
+                    return response.json()['resolved_record']
+                else:
+                    logger.warning(f"Conflict resolution failed, using new record: {response.text}")
+                    return new_record
+                    
+            except Exception as e:
+                logger.error(f"Conflict resolution error: {e}")
+                return new_record
+                
+        def sync_redis_data(self):
+            """Synchronize Redis cache data between regions"""
+            if not self.primary_redis or not self.replica_redis:
+                logger.error("Redis connections not available")
+                return
+                
+            try:
+                # Get all keys from primary Redis
+                keys = self.primary_redis.keys('*')
+                synced_count = 0
+                
+                for key in keys:
+                    # Get value and TTL from primary
+                    value = self.primary_redis.get(key)
+                    ttl = self.primary_redis.ttl(key)
+                    
+                    if value:
+                        # Set in replica with same TTL
+                        if ttl > 0:
+                            self.replica_redis.setex(key, ttl, value)
+                        else:
+                            self.replica_redis.set(key, value)
+                        synced_count += 1
+                        
+                logger.info(f"Synchronized {synced_count} Redis keys")
+                
+            except Exception as e:
+                logger.error(f"Redis sync failed: {e}")
+                
+        def run_sync_cycle(self):
+            """Run a complete synchronization cycle"""
+            logger.info("Starting data synchronization cycle")
+            
+            start_time = time.time()
+            
+            # Sync database changes
+            self.sync_database_changes()
+            
+            # Sync Redis data
+            self.sync_redis_data()
+            
+            duration = time.time() - start_time
+            logger.info(f"Synchronization cycle completed in {duration:.2f} seconds")
+            
+    if __name__ == "__main__":
+        sync_service = DataSyncService()
+        sync_service.run_sync_cycle()

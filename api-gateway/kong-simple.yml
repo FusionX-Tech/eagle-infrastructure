@@ -1,0 +1,95 @@
+# Kong Declarative Configuration - Eagle Solo-Full (Simplified)
+_format_version: "3.0"
+_transform: true
+
+# Services Configuration - Microservices
+services:
+  # Orchestrator Service (existing)
+  - name: ms-orchestrator
+    url: http://ms-orchestrator:8088
+    tags: ["microservice", "orchestrator"]
+    connect_timeout: 30000
+    write_timeout: 30000
+    read_timeout: 30000
+    retries: 3
+    
+  # Alert Service (existing)
+  - name: ms-alert
+    url: http://ms-alert:8083
+    tags: ["microservice", "alert"]
+    connect_timeout: 30000
+    write_timeout: 30000
+    read_timeout: 30000
+    retries: 3
+
+# Routes Configuration
+routes:
+  # Orchestrator Routes
+  - name: orchestrator-route
+    service: ms-orchestrator
+    paths: ["/api"]
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
+    strip_path: false
+    preserve_host: false
+    tags: ["api", "orchestrator"]
+    
+  # Alert Routes
+  - name: alert-route
+    service: ms-alert
+    paths: ["/api/v1/alerts"]
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
+    strip_path: false
+    preserve_host: false
+    tags: ["api", "alerts"]
+
+# Global Plugins
+plugins:
+  # CORS Plugin - Global
+  - name: cors
+    config:
+      origins:
+        - "http://localhost:3001"
+        - "http://localhost:5173"
+        - "https://eagle.fusionx.pro"
+      methods:
+        - GET
+        - POST
+        - PUT
+        - DELETE
+        - PATCH
+        - OPTIONS
+      headers:
+        - Accept
+        - Accept-Version
+        - Content-Length
+        - Content-MD5
+        - Content-Type
+        - Date
+        - Authorization
+        - X-Auth-Token
+        - X-Correlation-ID
+      exposed_headers:
+        - X-Auth-Token
+        - X-Correlation-ID
+      credentials: true
+      max_age: 3600
+      preflight_continue: false
+    tags: ["security", "cors"]
+    
+  # Request ID Plugin - Global
+  - name: correlation-id
+    config:
+      header_name: X-Correlation-ID
+      generator: uuid#counter
+      echo_downstream: true
+    tags: ["observability", "correlation"]
+    
+  # Rate Limiting Plugin - Global
+  - name: rate-limiting
+    config:
+      minute: 1000
+      hour: 10000
+      policy: local
+      fault_tolerant: true
+      hide_client_headers: false
+    tags: ["security", "rate-limiting"]

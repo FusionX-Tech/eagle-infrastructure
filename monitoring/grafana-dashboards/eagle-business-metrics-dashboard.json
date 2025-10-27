@@ -1,0 +1,297 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Eagle Alert System - Business Metrics",
+    "tags": ["eagle", "business", "kpi"],
+    "style": "dark",
+    "timezone": "browser",
+    "refresh": "1m",
+    "time": {
+      "from": "now-24h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Daily Alert Creation Volume",
+        "type": "stat",
+        "gridPos": {"h": 6, "w": 8, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "sum(eagle:daily_alerts_created)",
+            "legendFormat": "Alerts Created Today",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "unit": "short",
+            "decimals": 0
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Hourly Alert Creation Rate",
+        "type": "stat",
+        "gridPos": {"h": 6, "w": 8, "x": 8, "y": 0},
+        "targets": [
+          {
+            "expr": "sum(eagle:hourly_alerts_created)",
+            "legendFormat": "Alerts/Hour",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 10},
+                {"color": "green", "value": 50}
+              ]
+            },
+            "unit": "short"
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "Enrichment Success Rate (24h)",
+        "type": "stat",
+        "gridPos": {"h": 6, "w": 8, "x": 16, "y": 0},
+        "targets": [
+          {
+            "expr": "eagle:enrichment_success_rate_daily * 100",
+            "legendFormat": "Success Rate %",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 90},
+                {"color": "green", "value": 95}
+              ]
+            },
+            "unit": "percent"
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Alert Creation Trend (7 days)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6},
+        "targets": [
+          {
+            "expr": "sum(increase(alerts_created_total{status=\"success\"}[1h]))",
+            "legendFormat": "Successful Alerts",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(increase(alerts_created_total{status=\"failed\"}[1h]))",
+            "legendFormat": "Failed Alerts",
+            "refId": "B"
+          }
+        ],
+        "yAxes": [
+          {"label": "Alerts per Hour", "min": 0},
+          {"show": false}
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Enrichment Performance",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6},
+        "targets": [
+          {
+            "expr": "eagle:alerts_enrichment_duration_p95",
+            "legendFormat": "95th Percentile",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(alerts_enrichment_duration_seconds_bucket[5m])))",
+            "legendFormat": "50th Percentile",
+            "refId": "B"
+          }
+        ],
+        "yAxes": [
+          {"label": "Seconds", "min": 0},
+          {"show": false}
+        ],
+        "thresholds": [
+          {"value": 30, "colorMode": "critical", "op": "gt"}
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Customer Data Availability",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 14},
+        "targets": [
+          {
+            "expr": "sum(rate(customer_data_requests_total{status=\"success\"}[5m]))",
+            "legendFormat": "Successful Requests",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(rate(customer_data_requests_total{status=\"not_found\"}[5m]))",
+            "legendFormat": "Customer Not Found",
+            "refId": "B"
+          },
+          {
+            "expr": "sum(rate(customer_data_requests_total{status=\"error\"}[5m]))",
+            "legendFormat": "Errors",
+            "refId": "C"
+          }
+        ],
+        "yAxes": [
+          {"label": "Requests/sec", "min": 0},
+          {"show": false}
+        ]
+      },
+      {
+        "id": 7,
+        "title": "External API Performance",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 14},
+        "targets": [
+          {
+            "expr": "eagle:external_api_success_rate * 100",
+            "legendFormat": "{{api_name}} Success Rate",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {"label": "Success Rate %", "min": 0, "max": 100},
+          {"show": false}
+        ],
+        "thresholds": [
+          {"value": 95, "colorMode": "critical", "op": "lt"}
+        ]
+      },
+      {
+        "id": 8,
+        "title": "Processing Queue Health",
+        "type": "table",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 22},
+        "targets": [
+          {
+            "expr": "aws_sqs_approximate_number_of_visible_messages",
+            "legendFormat": "{{queue_name}}",
+            "refId": "A",
+            "format": "table"
+          },
+          {
+            "expr": "eagle:sqs_message_processing_rate",
+            "legendFormat": "{{queue_name}}",
+            "refId": "B",
+            "format": "table"
+          }
+        ],
+        "transformations": [
+          {
+            "id": "merge",
+            "options": {}
+          },
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {"Time": true},
+              "renameByName": {
+                "queue_name": "Queue Name",
+                "Value #A": "Messages in Queue",
+                "Value #B": "Processing Rate (msg/sec)"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": 9,
+        "title": "SLA Compliance Summary",
+        "type": "table",
+        "gridPos": {"h": 6, "w": 24, "x": 0, "y": 30},
+        "targets": [
+          {
+            "expr": "eagle:sla_response_time_compliance",
+            "legendFormat": "{{service}}",
+            "refId": "A",
+            "format": "table"
+          },
+          {
+            "expr": "eagle:service_availability_24h",
+            "legendFormat": "{{service}}",
+            "refId": "B",
+            "format": "table"
+          },
+          {
+            "expr": "eagle:sla_error_budget_remaining",
+            "legendFormat": "{{service}}",
+            "refId": "C",
+            "format": "table"
+          }
+        ],
+        "transformations": [
+          {
+            "id": "merge",
+            "options": {}
+          },
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {"Time": true},
+              "renameByName": {
+                "service": "Service",
+                "Value #A": "Response Time SLA (%)",
+                "Value #B": "Availability (%)",
+                "Value #C": "Error Budget Remaining (%)"
+              }
+            }
+          }
+        ],
+        "fieldConfig": {
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "Response Time SLA (%)"},
+              "properties": [
+                {
+                  "id": "thresholds",
+                  "value": {
+                    "steps": [
+                      {"color": "red", "value": 0},
+                      {"color": "yellow", "value": 95},
+                      {"color": "green", "value": 99}
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "matcher": {"id": "byName", "options": "Availability (%)"},
+              "properties": [
+                {
+                  "id": "thresholds",
+                  "value": {
+                    "steps": [
+                      {"color": "red", "value": 0},
+                      {"color": "yellow", "value": 99},
+                      {"color": "green", "value": 99.9}
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

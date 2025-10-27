@@ -1,0 +1,164 @@
+# Vertical Pod Autoscaler configurations for all microservices
+# VPA provides resource recommendations and can automatically update resource requests
+
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: ms-orchestrator-vpa
+  namespace: eagle-services
+  labels:
+    app: ms-orchestrator
+    component: orchestrator
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ms-orchestrator
+  updatePolicy:
+    updateMode: "Auto"
+  resourcePolicy:
+    containerPolicies:
+    - containerName: ms-orchestrator
+      minAllowed:
+        cpu: 100m
+        memory: 256Mi
+      maxAllowed:
+        cpu: 2000m
+        memory: 2Gi
+      controlledResources: ["cpu", "memory"]
+      controlledValues: RequestsAndLimits
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: ms-alert-vpa
+  namespace: eagle-services
+  labels:
+    app: ms-alert
+    component: alert-management
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ms-alert
+  updatePolicy:
+    updateMode: "Auto"
+  resourcePolicy:
+    containerPolicies:
+    - containerName: ms-alert
+      minAllowed:
+        cpu: 100m
+        memory: 256Mi
+      maxAllowed:
+        cpu: 1500m
+        memory: 1.5Gi
+      controlledResources: ["cpu", "memory"]
+      controlledValues: RequestsAndLimits
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: ms-customer-vpa
+  namespace: eagle-services
+  labels:
+    app: ms-customer
+    component: customer-data
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ms-customer
+  updatePolicy:
+    updateMode: "Auto"
+  resourcePolicy:
+    containerPolicies:
+    - containerName: ms-customer
+      minAllowed:
+        cpu: 150m
+        memory: 512Mi
+      maxAllowed:
+        cpu: 2000m
+        memory: 3Gi
+      controlledResources: ["cpu", "memory"]
+      controlledValues: RequestsAndLimits
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: ms-transaction-vpa
+  namespace: eagle-services
+  labels:
+    app: ms-transaction
+    component: transaction-analytics
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ms-transaction
+  updatePolicy:
+    updateMode: "Auto"
+  resourcePolicy:
+    containerPolicies:
+    - containerName: ms-transaction
+      minAllowed:
+        cpu: 200m
+        memory: 768Mi
+      maxAllowed:
+        cpu: 3000m
+        memory: 4Gi
+      controlledResources: ["cpu", "memory"]
+      controlledValues: RequestsAndLimits
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: ms-api-vpa
+  namespace: eagle-services
+  labels:
+    app: ms-api
+    component: external-api
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ms-api
+  updatePolicy:
+    updateMode: "Auto"
+  resourcePolicy:
+    containerPolicies:
+    - containerName: ms-api
+      minAllowed:
+        cpu: 150m
+        memory: 384Mi
+      maxAllowed:
+        cpu: 1500m
+        memory: 2Gi
+      controlledResources: ["cpu", "memory"]
+      controlledValues: RequestsAndLimits
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: ms-enrichment-vpa
+  namespace: eagle-services
+  labels:
+    app: ms-enrichment
+    component: data-enrichment
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ms-enrichment
+  updatePolicy:
+    updateMode: "Auto"
+  resourcePolicy:
+    containerPolicies:
+    - containerName: ms-enrichment
+      minAllowed:
+        cpu: 200m
+        memory: 512Mi
+      maxAllowed:
+        cpu: 2500m
+        memory: 3Gi
+      controlledResources: ["cpu", "memory"]
+      controlledValues: RequestsAndLimits

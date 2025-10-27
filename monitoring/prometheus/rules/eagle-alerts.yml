@@ -1,0 +1,201 @@
+# Eagle Alert System - Prometheus Alerting Rules
+groups:
+  - name: eagle.microservices
+    rules:
+      # Service availability alerts
+      - alert: EagleMicroserviceDown
+        expr: up{job=~"eagle-.*"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: fusionx-engineering
+        annotations:
+          summary: "Eagle microservice {{ $labels.job }} is down"
+          description: "Eagle microservice {{ $labels.job }} has been down for more than 1 minute."
+          runbook_url: "https://wiki.fusionx.pro/runbooks/microservice-down"
+
+      # High response time alerts
+      - alert: EagleHighResponseTime
+        expr: histogram_quantile(0.99, rate(http_server_requests_seconds_bucket{job=~"eagle-.*"}[5m])) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+          team: fusionx-engineering
+        annotations:
+          summary: "High response time on {{ $labels.job }}"
+          description: "99th percentile response time is {{ $value }}s on {{ $labels.job }}"
+          runbook_url: "https://wiki.fusionx.pro/runbooks/high-response-time"
+
+      # High error rate alerts
+      - alert: EagleHighErrorRate
+        expr: rate(http_server_requests_total{job=~"eagle-.*",status=~"5.."}[5m]) / rate(http_server_requests_total{job=~"eagle-.*"}[5m]) > 0.01
+        for: 2m
+        labels:
+          severity: critical
+          team: fusionx-engineering
+        annotations:
+          summary: "High error rate on {{ $labels.job }}"
+          description: "Error rate is {{ $value | humanizePercentage }} on {{ $labels.job }}"
+          runbook_url: "https://wiki.fusionx.pro/runbooks/high-error-rate"
+
+      # Memory usage alerts
+      - alert: EagleHighMemoryUsage
+        expr: eagle_jvm_memory_heap_used / eagle_jvm_memory_heap_max > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          team: fusionx-engineering
+        annotations:
+          summary: "High memory usage on {{ $labels.job }}"
+          description: "Memory usage is {{ $value | humanizePercentage }} on {{ $labels.job }}"
+          runbook_url: "https://wiki.fusionx.pro/runbooks/high-memory-usage"
+
+      # Critical memory usage
+      - alert: EagleCriticalMemoryUsage
+        expr: eagle_jvm_memory_heap_used / eagle_jvm_memory_heap_max > 0.95
+        for: 1m
+        labels:
+          severity: critical
+          team: fusionx-engineering
+        annotations:
+          summary: "Critical memory usage on {{ $labels.job }}"
+          description: "Memory usage is {{ $value | humanizePercentage }} on {{ $labels.job }}"
+          runbook_url: "https://wiki.fusionx.pro/runbooks/critical-memory-usage"
+
+  - name: eagle.business
+    rules:
+      # Alert processing alerts
+      - alert: EagleAlertProcessingStalled
+        expr: increase(eagle_alerts_received_total[5m]) > 0 and increase(eagle_alerts_processed_total[5m]) == 0
+        for: 3m
+        labels:
+          severity: critical
+          team: fusionx-engineering
+        annotations:
+          summary: "Alert processing appears to be stalled"
+          description: "Alerts are being received but not processed for more than 3 minutes"
+          runbook_url: "https://wiki.fusionx.pro/runbooks/alert-processing-stalled"
+
+      # High alert rejection rate
+      - alert: EagleHighAlertRejectionRate
+        expr: rate(eagle_alerts_rejected_total[5m]) / rate(eagle_alerts_received_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+          team: fusionx-engineering
+        annotations:
+          summary: "High alert rejection rate"
+          description: "Alert rejection rate is {{ $value | humanizePercentage }}"
+          runbook_url: "https://wiki.fusionx.pro/runbooks/high-rejection-rate"
+
+      # Enrichment processing delays
+      - alert: EagleEnrichmentDelayed
+        expr: eagle_enrichment_pending_current > 100
+        for: 5m
+        labels:
+          severity: warning
+          team: fusionx-engineering
+        annotations:
+          summary: "High number of pending enrichments"
+          description: "{{ $value }} enrichments are pending processing"
+          runbook_url: "https://wiki.fusionx.pro/runbooks/enrichment-delayed"
+
+      # Database connection issues
+      - alert: EagleDatabaseConnectionIssues
+        expr: rate(eagle_database_errors_total[5m]) > 0.1
+        for: 1m
+        labels:
+          severity: critical
+          team: fusionx-engineering
+        annotations:
+          summary: "Database connection issues detected"
+          description: "Database error rate is {{ $value }} errors per second"
+          runbook_url: "https://wiki.fusionx.pro/runbooks/database-issues"
+
+  - name: eagle.infrastructure
+    rules:
+      # PostgreSQL alerts
+      - alert: PostgreSQLDown
+        expr: up{job="postgres-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: fusionx-engineering
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL database is not responding"
+          runbook_url: "https://wiki.fusionx.pro/runbooks/postgresql-down"
+
+      # Redis alerts
+      - alert: RedisDown
+        expr: up{job="redis-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: fusionx-engineering
+        annotations:
+          summary: "Redis is down"
+          description: "Redis cache is not responding"
+          runbook_url: "https://wiki.fusionx.pro/runbooks/redis-down"
+
+      # Kong API Gateway alerts
+      - alert: KongDown
+        expr: up{job="kong-prometheus"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: fusionx-engineering
+        annotations:
+          summary: "Kong API Gateway is down"
+          description: "Kong API Gateway is not responding"
+          runbook_url: "https://wiki.fusionx.pro/runbooks/kong-down"
+
+      # Keycloak alerts
+      - alert: KeycloakDown
+        expr: up{job="keycloak"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: fusionx-engineering
+        annotations:
+          summary: "Keycloak is down"
+          description: "Keycloak authentication service is not responding"
+          runbook_url: "https://wiki.fusionx.pro/runbooks/keycloak-down"
+
+  - name: eagle.performance
+    rules:
+      # SLA compliance alerts
+      - alert: EagleSLAViolationResponseTime
+        expr: histogram_quantile(0.99, rate(http_server_requests_seconds_bucket{job=~"eagle-.*"}[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          team: fusionx-engineering
+        annotations:
+          summary: "SLA violation: Response time exceeds 100ms"
+          description: "99th percentile response time is {{ $value }}s, exceeding SLA of 100ms"
+          runbook_url: "https://wiki.fusionx.pro/runbooks/sla-violation-response-time"
+
+      # Throughput alerts
+      - alert: EagleLowThroughput
+        expr: rate(http_server_requests_total{job=~"eagle-.*"}[5m]) < 10
+        for: 10m
+        labels:
+          severity: warning
+          team: fusionx-engineering
+        annotations:
+          summary: "Low throughput detected"
+          description: "Request rate is {{ $value }} requests/second, below expected threshold"
+          runbook_url: "https://wiki.fusionx.pro/runbooks/low-throughput"
+
+      # Startup time alerts
+      - alert: EagleSlowStartup
+        expr: eagle_application_startup_time > 3
+        for: 0m
+        labels:
+          severity: warning
+          team: fusionx-engineering
+        annotations:
+          summary: "Slow application startup"
+          description: "Application startup time is {{ $value }}s, exceeding SLA of 3s"
+          runbook_url: "https://wiki.fusionx.pro/runbooks/slow-startup"

@@ -1,0 +1,75 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ms-api-hpa
+  namespace: eagle-services
+  labels:
+    app: ms-api
+    component: external-api
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ms-api
+  minReplicas: 2
+  maxReplicas: 12
+  metrics:
+  # CPU-based scaling
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  # Memory-based scaling
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  # Custom metric: SQS queue depth for external API requests
+  - type: Pods
+    pods:
+      metric:
+        name: sqs_messages_visible_external_api_request
+      target:
+        type: AverageValue
+        averageValue: "6"
+  # Custom metric: External API response time
+  - type: Pods
+    pods:
+      metric:
+        name: http_client_requests_duration_seconds_avg
+      target:
+        type: AverageValue
+        averageValue: "5"
+  # Custom metric: Rate limiting pressure
+  - type: Pods
+    pods:
+      metric:
+        name: rate_limit_pressure_ratio
+      target:
+        type: AverageValue
+        averageValue: "0.7"
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 90
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 60
+      - type: Pods
+        value: 2
+        periodSeconds: 60
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+      - type: Pods
+        value: 1
+        periodSeconds: 60
+      selectPolicy: Min

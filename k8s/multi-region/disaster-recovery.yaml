@@ -1,0 +1,634 @@
+# Disaster Recovery Procedures for Multi-Region Deployment
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: disaster-recovery-procedures
+  namespace: eagle-services
+data:
+  disaster-recovery-playbook.md: |
+    # Disaster Recovery Playbook
+    
+    ## Overview
+    This playbook provides step-by-step procedures for disaster recovery scenarios in the Eagle Alert System multi-region deployment.
+    
+    ## Recovery Time Objectives (RTO) and Recovery Point Objectives (RPO)
+    - **RTO Target**: 15 minutes for non-critical services, 5 minutes for critical services
+    - **RPO Target**: 1 minute for critical data, 5 minutes for non-critical data
+    
+    ## Disaster Scenarios
+    
+    ### 1. Primary Region Complete Outage
+    
+    #### Detection
+    - Multiple health check failures across all services in primary region
+    - Network connectivity issues to primary region
+    - Infrastructure provider notifications
+    
+    #### Response Procedure
+    1. **Immediate Actions (0-5 minutes)**
+       ```bash
+       # Verify outage scope
+       kubectl get nodes --context=primary-region
+       kubectl get pods -A --context=primary-region
+       
+       # Check secondary region status
+       kubectl get nodes --context=secondary-region
+       kubectl get pods -A --context=secondary-region
+       ```
+    
+    2. **Activate Secondary Region (5-10 minutes)**
+       ```bash
+       # Scale up secondary region services
+       kubectl scale deployment --replicas=3 -l app.kubernetes.io/component=microservice --context=secondary-region
+       
+       # Update DNS to point to secondary region
+       kubectl patch configmap multi-region-config --type merge -p '{"data":{"active.region":"us-west-2"}}' --context=secondary-region
+       
+       # Promote read replica to primary
+       kubectl exec -it postgres-replica-west-0 --context=secondary-region -- pg_promote
+       ```
+    
+    3. **Verify Services (10-15 minutes)**
+       ```bash
+       # Check all services are healthy
+       kubectl get pods -l app.kubernetes.io/component=microservice --context=secondary-region
+       
+       # Test critical endpoints
+       curl -f https://api-secondary.eagle.com/health
+       curl -f https://api-secondary.eagle.com/actuator/health
+       ```
+    
+    ### 2. Database Failure
+    
+    #### Detection
+    - Database connection failures
+    - Replication lag exceeding thresholds
+    - Data corruption alerts
+    
+    #### Response Procedure
+    1. **Assess Damage**
+       ```bash
+       # Check database status
+       kubectl exec -it postgres-primary-0 -- pg_isready
+       
+       # Check replication status
+       kubectl exec -it postgres-primary-0 -- psql -c "SELECT * FROM pg_stat_replication;"
+       ```
+    
+    2. **Failover to Replica**
+       ```bash
+       # Promote replica to primary
+       kubectl exec -it postgres-replica-west-0 -- pg_promote
+       
+       # Update application configuration
+       kubectl patch configmap database-config --type merge -p '{"data":{"postgres.host":"postgres-replica-west-service"}}'
+       
+       # Restart applications
+       kubectl rollout restart deployment -l app.kubernetes.io/component=microservice
+       ```
+    
+    ### 3. Redis Cache Failure
+    
+    #### Detection
+    - Redis connection timeouts
+    - Cache miss rate exceeding 90%
+    - Sentinel failover notifications
+    
+    #### Response Procedure
+    1. **Check Redis Sentinel Status**
+       ```bash
+       kubectl exec -it redis-sentinel-0 -- redis-cli -p 26379 SENTINEL masters
+       ```
+    
+    2. **Manual Failover if Needed**
+       ```bash
+       kubectl exec -it redis-sentinel-0 -- redis-cli -p 26379 SENTINEL failover eagle-redis
+       ```
+    
+    ### 4. Network Partition
+    
+    #### Detection
+    - Cross-region connectivity failures
+    - Split-brain scenarios
+    - Inconsistent data between regions
+    
+    #### Response Procedure
+    1. **Identify Active Region**
+       ```bash
+       # Check which region is serving traffic
+       nslookup api.eagle.com
+       
+       # Verify service health in both regions
+       curl -f https://api-primary.eagle.com/health
+       curl -f https://api-secondary.eagle.com/health
+       ```
+    
+    2. **Resolve Split-Brain**
+       ```bash
+       # Stop services in one region to prevent conflicts
+       kubectl scale deployment --replicas=0 -l app.kubernetes.io/component=microservice --context=secondary-region
+       
+       # Wait for network recovery
+       # Then resync data and restart services
+       ```
+    
+    ## Recovery Procedures
+    
+    ### Post-Incident Recovery
+    
+    1. **Data Consistency Check**
+       ```bash
+       # Run data consistency validation
+       kubectl create job --from=cronjob/data-consistency-check data-consistency-check-$(date +%s)
+       ```
+    
+    2. **Gradual Traffic Restoration**
+       ```bash
+       # Gradually increase traffic to recovered region
+       kubectl patch virtualservice eagle-api --type merge -p '{"spec":{"http":[{"match":[{"headers":{"x-canary":{"exact":"true"}}}],"route":[{"destination":{"host":"primary-region"},"weight":10}]}]}}'
+       ```
+    
+    3. **Full Service Restoration**
+       ```bash
+       # Restore full traffic routing
+       kubectl patch virtualservice eagle-api --type merge -p '{"spec":{"http":[{"route":[{"destination":{"host":"primary-region"},"weight":100}]}]}}'
+       ```
+    
+    ## Monitoring and Alerting
+    
+    ### Key Metrics to Monitor
+    - Service availability (target: 99.9%)
+    - Response time (target: <500ms p95)
+    - Error rate (target: <0.1%)
+    - Replication lag (target: <5 seconds)
+    - Cross-region connectivity
+    
+    ### Alert Escalation
+    1. **Level 1**: Automated recovery attempts
+    2. **Level 2**: On-call engineer notification
+    3. **Level 3**: Incident commander activation
+    4. **Level 4**: Executive notification
+    
+    ## Testing Procedures
+    
+    ### Disaster Recovery Drills
+    - Monthly: Automated failover testing
+    - Quarterly: Full region failover simulation
+    - Annually: Complete disaster recovery exercise
+    
+    ### Chaos Engineering
+    - Random pod termination
+    - Network partition simulation
+    - Database failure injection
+    - Load testing during failures
+    
+  automated-recovery.sh: |
+    #!/bin/bash
+    set -euo pipefail
+    
+    # Automated Disaster Recovery Script
+    
+    # Configuration
+    PRIMARY_REGION="us-east-1"
+    SECONDARY_REGION="us-west-2"
+    HEALTH_CHECK_TIMEOUT=30
+    FAILOVER_THRESHOLD=3
+    NOTIFICATION_WEBHOOK="${NOTIFICATION_WEBHOOK_URL}"
+    
+    # Logging
+    log() {
+        echo "$(date -Iseconds) [DR] $*" | tee -a /var/log/disaster-recovery.log
+    }
+    
+    # Send notification
+    notify() {
+        local severity=$1
+        local message=$2
+        
+        curl -X POST "$NOTIFICATION_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d "{
+                \"text\": \"🚨 DISASTER RECOVERY: $message\",
+                \"severity\": \"$severity\",
+                \"timestamp\": \"$(date -Iseconds)\",
+                \"service\": \"disaster-recovery\"
+            }" || true
+    }
+    
+    # Check region health
+    check_region_health() {
+        local region=$1
+        local endpoint=$2
+        
+        log "Checking health for region: $region"
+        
+        # API Gateway health
+        if ! curl -sf --max-time $HEALTH_CHECK_TIMEOUT "$endpoint/health" > /dev/null 2>&1; then
+            log "CRITICAL: API Gateway health check failed for $region"
+            return 1
+        fi
+        
+        # Database health
+        if ! curl -sf --max-time $HEALTH_CHECK_TIMEOUT "$endpoint/actuator/health/db" > /dev/null 2>&1; then
+            log "WARNING: Database health check failed for $region"
+            return 2
+        fi
+        
+        # Redis health
+        if ! curl -sf --max-time $HEALTH_CHECK_TIMEOUT "$endpoint/actuator/health/redis" > /dev/null 2>&1; then
+            log "WARNING: Redis health check failed for $region"
+            return 2
+        fi
+        
+        log "SUCCESS: All health checks passed for $region"
+        return 0
+    }
+    
+    # Failover to secondary region
+    failover_to_secondary() {
+        log "ALERT: Initiating failover to secondary region"
+        notify "critical" "Initiating automatic failover to $SECONDARY_REGION"
+        
+        # Scale up secondary region services
+        kubectl scale deployment --replicas=3 -l app.kubernetes.io/component=microservice --context=$SECONDARY_REGION || {
+            log "ERROR: Failed to scale up secondary region services"
+            notify "critical" "Failed to scale up secondary region services"
+            return 1
+        }
+        
+        # Update active region configuration
+        kubectl patch configmap multi-region-config --type merge \
+            -p "{\"data\":{\"active.region\":\"$SECONDARY_REGION\"}}" \
+            --context=$SECONDARY_REGION || {
+            log "ERROR: Failed to update region configuration"
+            notify "critical" "Failed to update region configuration"
+            return 1
+        }
+        
+        # Promote database replica
+        kubectl exec -it postgres-replica-west-0 --context=$SECONDARY_REGION -- pg_promote || {
+            log "ERROR: Failed to promote database replica"
+            notify "critical" "Failed to promote database replica"
+            return 1
+        }
+        
+        # Update database configuration
+        kubectl patch configmap database-config --type merge \
+            -p '{"data":{"postgres.host":"postgres-replica-west-service"}}' \
+            --context=$SECONDARY_REGION || {
+            log "ERROR: Failed to update database configuration"
+            notify "critical" "Failed to update database configuration"
+            return 1
+        }
+        
+        # Restart applications to pick up new configuration
+        kubectl rollout restart deployment -l app.kubernetes.io/component=microservice --context=$SECONDARY_REGION || {
+            log "ERROR: Failed to restart applications"
+            notify "critical" "Failed to restart applications"
+            return 1
+        }
+        
+        # Wait for rollout to complete
+        kubectl rollout status deployment -l app.kubernetes.io/component=microservice --context=$SECONDARY_REGION --timeout=300s || {
+            log "ERROR: Rollout did not complete in time"
+            notify "critical" "Application rollout did not complete in time"
+            return 1
+        }
+        
+        log "SUCCESS: Failover to secondary region completed"
+        notify "warning" "Failover to $SECONDARY_REGION completed successfully"
+        return 0
+    }
+    
+    # Validate failover success
+    validate_failover() {
+        local secondary_endpoint="https://api-secondary.eagle.com"
+        
+        log "Validating failover success"
+        
+        # Wait for services to be ready
+        sleep 30
+        
+        # Check secondary region health
+        if check_region_health "$SECONDARY_REGION" "$secondary_endpoint"; then
+            log "SUCCESS: Failover validation passed"
+            notify "info" "Failover validation successful - system is operational"
+            return 0
+        else
+            log "ERROR: Failover validation failed"
+            notify "critical" "Failover validation failed - manual intervention required"
+            return 1
+        fi
+    }
+    
+    # Recovery procedure for primary region
+    recover_primary_region() {
+        log "Starting primary region recovery procedure"
+        notify "info" "Starting primary region recovery"
+        
+        # Check if primary region is back online
+        if check_region_health "$PRIMARY_REGION" "https://api-primary.eagle.com"; then
+            log "Primary region is healthy, starting recovery"
+            
+            # Sync data from secondary to primary
+            kubectl create job --from=cronjob/data-sync-job data-sync-recovery-$(date +%s) --context=$PRIMARY_REGION || {
+                log "ERROR: Failed to start data sync job"
+                return 1
+            }
+            
+            # Wait for data sync to complete
+            sleep 120
+            
+            # Gradually shift traffic back to primary
+            log "Gradually shifting traffic back to primary region"
+            
+            # 10% traffic to primary
+            kubectl patch virtualservice eagle-api --type merge \
+                -p '{"spec":{"http":[{"route":[{"destination":{"host":"primary-region"},"weight":10},{"destination":{"host":"secondary-region"},"weight":90}]}]}}' \
+                --context=$PRIMARY_REGION
+            
+            sleep 60
+            
+            # 50% traffic to primary
+            kubectl patch virtualservice eagle-api --type merge \
+                -p '{"spec":{"http":[{"route":[{"destination":{"host":"primary-region"},"weight":50},{"destination":{"host":"secondary-region"},"weight":50}]}]}}' \
+                --context=$PRIMARY_REGION
+            
+            sleep 60
+            
+            # 100% traffic to primary
+            kubectl patch virtualservice eagle-api --type merge \
+                -p '{"spec":{"http":[{"route":[{"destination":{"host":"primary-region"},"weight":100}]}]}}' \
+                --context=$PRIMARY_REGION
+            
+            # Update active region
+            kubectl patch configmap multi-region-config --type merge \
+                -p "{\"data\":{\"active.region\":\"$PRIMARY_REGION\"}}" \
+                --context=$PRIMARY_REGION
+            
+            log "SUCCESS: Primary region recovery completed"
+            notify "info" "Primary region recovery completed successfully"
+            return 0
+        else
+            log "Primary region is still unhealthy, skipping recovery"
+            return 1
+        fi
+    }
+    
+    # Main disaster recovery logic
+    main() {
+        log "Starting disaster recovery monitoring"
+        
+        local primary_failures=0
+        local in_failover=false
+        
+        while true; do
+            # Check primary region health
+            if check_region_health "$PRIMARY_REGION" "https://api-primary.eagle.com"; then
+                primary_failures=0
+                
+                # If we're in failover mode and primary is healthy, consider recovery
+                if [ "$in_failover" = true ]; then
+                    log "Primary region is healthy again, considering recovery"
+                    if recover_primary_region; then
+                        in_failover=false
+                    fi
+                fi
+            else
+                primary_failures=$((primary_failures + 1))
+                log "Primary region failure count: $primary_failures"
+                
+                # If we haven't failed over yet and threshold is reached
+                if [ "$in_failover" = false ] && [ $primary_failures -ge $FAILOVER_THRESHOLD ]; then
+                    log "Primary region failure threshold reached, initiating failover"
+                    
+                    if failover_to_secondary && validate_failover; then
+                        in_failover=true
+                        primary_failures=0
+                    else
+                        log "CRITICAL: Failover failed, manual intervention required"
+                        notify "critical" "Automatic failover failed - MANUAL INTERVENTION REQUIRED"
+                    fi
+                fi
+            fi
+            
+            # Wait before next check
+            sleep 60
+        done
+    }
+    
+    # Handle script termination
+    cleanup() {
+        log "Disaster recovery script terminated"
+        notify "info" "Disaster recovery monitoring stopped"
+    }
+    
+    trap cleanup EXIT
+    
+    # Start monitoring
+    main
+
+---
+# Disaster Recovery Service Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: disaster-recovery-service
+  namespace: eagle-services
+  labels:
+    app: disaster-recovery
+    component: automation
+spec:
+  replicas: 1  # Single instance to avoid conflicts
+  selector:
+    matchLabels:
+      app: disaster-recovery
+  template:
+    metadata:
+      labels:
+        app: disaster-recovery
+        component: automation
+    spec:
+      serviceAccountName: disaster-recovery-service-account
+      containers:
+      - name: disaster-recovery
+        image: alpine/k8s:1.28.0
+        command:
+        - /bin/sh
+        - -c
+        - |
+          apk add --no-cache curl bash
+          chmod +x /scripts/automated-recovery.sh
+          /scripts/automated-recovery.sh
+        env:
+        - name: NOTIFICATION_WEBHOOK_URL
+          valueFrom:
+            secretKeyRef:
+              name: notification-secrets
+              key: webhook-url
+        - name: KUBECONFIG
+          value: "/etc/kubeconfig/config"
+        volumeMounts:
+        - name: disaster-recovery-scripts
+          mountPath: /scripts
+        - name: kubeconfig
+          mountPath: /etc/kubeconfig
+          readOnly: true
+        - name: disaster-recovery-logs
+          mountPath: /var/log
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - "pgrep -f automated-recovery.sh"
+          initialDelaySeconds: 30
+          periodSeconds: 60
+      volumes:
+      - name: disaster-recovery-scripts
+        configMap:
+          name: disaster-recovery-procedures
+          defaultMode: 0755
+      - name: kubeconfig
+        secret:
+          secretName: multi-region-kubeconfig
+      - name: disaster-recovery-logs
+        persistentVolumeClaim:
+          claimName: disaster-recovery-logs-pvc
+
+---
+# Service Account for Disaster Recovery
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: disaster-recovery-service-account
+  namespace: eagle-services
+
+---
+# ClusterRole for Disaster Recovery Operations
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: disaster-recovery-role
+rules:
+- apiGroups: [""]
+  resources: ["configmaps", "services", "endpoints", "pods"]
+  verbs: ["get", "list", "patch", "update", "create"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "deployments/scale", "replicasets"]
+  verbs: ["get", "list", "patch", "update", "create"]
+- apiGroups: ["batch"]
+  resources: ["jobs", "cronjobs"]
+  verbs: ["get", "list", "create"]
+- apiGroups: ["networking.istio.io"]
+  resources: ["virtualservices", "destinationrules"]
+  verbs: ["get", "list", "patch", "update"]
+- apiGroups: [""]
+  resources: ["pods/exec"]
+  verbs: ["create"]
+
+---
+# ClusterRoleBinding for Disaster Recovery
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: disaster-recovery-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: disaster-recovery-role
+subjects:
+- kind: ServiceAccount
+  name: disaster-recovery-service-account
+  namespace: eagle-services
+
+---
+# PVC for Disaster Recovery Logs
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: disaster-recovery-logs-pvc
+  namespace: eagle-services
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: gp3
+
+---
+# Data Consistency Check CronJob
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: data-consistency-check
+  namespace: eagle-services
+spec:
+  schedule: "0 */6 * * *"  # Run every 6 hours
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: consistency-checker
+            image: postgres:16-alpine
+            command:
+            - /bin/sh
+            - -c
+            - |
+              # Data consistency validation script
+              echo "Starting data consistency check..."
+              
+              # Check record counts between regions
+              PRIMARY_COUNT=$(psql -h $PRIMARY_DB_HOST -U $POSTGRES_USER -d $POSTGRES_DB -t -c "SELECT COUNT(*) FROM alerts;")
+              REPLICA_COUNT=$(psql -h $REPLICA_DB_HOST -U $POSTGRES_USER -d $POSTGRES_DB -t -c "SELECT COUNT(*) FROM alerts;")
+              
+              echo "Primary region alerts: $PRIMARY_COUNT"
+              echo "Replica region alerts: $REPLICA_COUNT"
+              
+              # Check for data inconsistencies
+              DIFF=$((PRIMARY_COUNT - REPLICA_COUNT))
+              if [ $DIFF -gt 100 ] || [ $DIFF -lt -100 ]; then
+                echo "WARNING: Significant data inconsistency detected (diff: $DIFF)"
+                curl -X POST "$WEBHOOK_URL" -H "Content-Type: application/json" -d "{
+                  \"text\": \"⚠️ Data inconsistency detected: Primary=$PRIMARY_COUNT, Replica=$REPLICA_COUNT, Diff=$DIFF\",
+                  \"severity\": \"warning\"
+                }"
+              else
+                echo "Data consistency check passed"
+              fi
+            env:
+            - name: PRIMARY_DB_HOST
+              value: "postgres-primary-service"
+            - name: REPLICA_DB_HOST
+              value: "postgres-replica-west-service"
+            - name: POSTGRES_USER
+              value: "postgres"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: database-secrets
+                  key: postgres-password
+            - name: POSTGRES_DB
+              value: "eagle_db"
+            - name: WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: notification-secrets
+                  key: webhook-url
+            resources:
+              requests:
+                memory: "64Mi"
+                cpu: "50m"
+              limits:
+                memory: "128Mi"
+                cpu: "100m"
+          restartPolicy: OnFailure

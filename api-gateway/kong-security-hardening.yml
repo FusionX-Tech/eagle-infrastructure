@@ -1,0 +1,350 @@
+# Kong Security Hardening Configuration
+# Comprehensive security policies for production deployment
+_format_version: "3.0"
+
+# Security-focused plugins for production hardening
+plugins:
+  # === ADVANCED SECURITY HEADERS ===
+  
+  # Comprehensive Security Headers Plugin
+  - name: response-transformer
+    config:
+      add:
+        headers:
+          # OWASP Security Headers
+          - "Strict-Transport-Security:max-age=31536000; includeSubDomains; preload"
+          - "X-Frame-Options:DENY"
+          - "X-Content-Type-Options:nosniff"
+          - "X-XSS-Protection:1; mode=block"
+          - "Referrer-Policy:strict-origin-when-cross-origin"
+          
+          # Content Security Policy - Strict
+          - "Content-Security-Policy:default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.fusionx.pro; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests; block-all-mixed-content; require-trusted-types-for 'script'"
+          
+          # Permissions Policy - Restrictive
+          - "Permissions-Policy:camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=(), ambient-light-sensor=(), autoplay=(), encrypted-media=(), fullscreen=(), picture-in-picture=(), screen-wake-lock=(), web-share=()"
+          
+          # Cross-Origin Policies
+          - "Cross-Origin-Embedder-Policy:require-corp"
+          - "Cross-Origin-Opener-Policy:same-origin"
+          - "Cross-Origin-Resource-Policy:same-origin"
+          
+          # Cache Control - No caching for sensitive data
+          - "Cache-Control:no-cache, no-store, must-revalidate, private"
+          - "Pragma:no-cache"
+          - "Expires:0"
+          
+          # Custom Security Headers
+          - "X-Security-Policy:hardened"
+          - "X-API-Security-Level:maximum"
+          - "X-Content-Security-Policy-Report-Only:false"
+          
+      remove:
+        headers:
+          # Remove all server identification
+          - "Server"
+          - "X-Powered-By"
+          - "X-Runtime"
+          - "X-AspNet-Version"
+          - "X-AspNetMvc-Version"
+          - "X-Kong-Upstream-Status"
+          - "X-Kong-Response-Latency"
+          - "Via"
+          
+  # === ADVANCED BOT DETECTION ===
+  
+  - name: bot-detection
+    config:
+      allow: []
+      deny: 
+        # Development tools
+        - "curl"
+        - "wget"
+        - "python-requests"
+        - "postman"
+        - "insomnia"
+        - "httpie"
+        
+        # Scrapers and crawlers
+        - "scrapy"
+        - "selenium"
+        - "phantomjs"
+        - "headless"
+        - "crawler"
+        - "spider"
+        - "bot"
+        - "scraper"
+        
+        # Security scanners
+        - "nmap"
+        - "masscan"
+        - "zap"
+        - "burp"
+        - "sqlmap"
+        - "nikto"
+        - "dirb"
+        - "gobuster"
+        
+  # === REQUEST SIZE LIMITING ===
+  
+  - name: request-size-limiting
+    config:
+      allowed_payload_size: 5  # 5MB max
+      size_unit: megabytes
+      require_content_length: true
+      
+  # === ADVANCED RATE LIMITING ===
+  
+  # Global rate limiting with Redis clustering
+  - name: rate-limiting-advanced
+    config:
+      limit:
+        - 1000  # requests per minute
+        - 10000 # requests per hour
+        - 100000 # requests per day
+      window_size:
+        - 60    # 1 minute
+        - 3600  # 1 hour  
+        - 86400 # 1 day
+      identifier: "consumer"
+      sync_rate: 10
+      strategy: "redis"
+      redis:
+        host: "redis-master"
+        port: 6379
+        database: 3
+        timeout: 2000
+        password: "${REDIS_PASSWORD}"
+        ssl: false
+        ssl_verify: false
+      hide_client_headers: false
+      error_code: 429
+      error_message: "Rate limit exceeded. Please try again later."
+      
+  # === IP RESTRICTION - PRODUCTION ===
+  
+  # Global IP whitelist for production
+  - name: ip-restriction
+    config:
+      allow: 
+        # Production network ranges (update with actual ranges)
+        - "10.0.0.0/8"      # Internal VPC
+        - "172.16.0.0/12"   # Docker networks
+        - "192.168.0.0/16"  # Private networks
+        
+        # CDN and load balancer IPs (update with actual IPs)
+        - "203.0.113.0/24"  # Example CDN range
+        - "198.51.100.0/24" # Example load balancer range
+        
+      deny: []
+      message: "Access denied from your IP address. Contact support if you believe this is an error."
+      
+  # === REQUEST VALIDATION ===
+  
+  # Global request validation
+  - name: request-validator
+    config:
+      version: draft4
+      parameter_schema:
+        - name: "X-Request-ID"
+          in: "header"
+          required: false
+          schema:
+            type: "string"
+            pattern: "^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$"
+            
+        - name: "User-Agent"
+          in: "header"
+          required: true
+          schema:
+            type: "string"
+            minLength: 10
+            maxLength: 500
+            
+        - name: "Accept"
+          in: "header"
+          required: true
+          schema:
+            type: "string"
+            pattern: "^application/json.*"
+            
+  # === SECURITY MONITORING ===
+  
+  # Security event logging
+  - name: http-log
+    config:
+      http_endpoint: "https://security-logs.fusionx.pro/api/v1/security-events"
+      method: "POST"
+      content_type: "application/json"
+      timeout: 5000
+      keepalive: 60000
+      flush_timeout: 2
+      retry_count: 3
+      queue_size: 1000
+      headers:
+        X-Source: "kong-gateway"
+        X-Environment: "production"
+        X-Security-Level: "hardened"
+        Authorization: "Bearer ${SECURITY_LOG_TOKEN}"
+      custom_fields_by_lua:
+        security_context: |
+          local json = require "cjson"
+          return json.encode({
+            timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+            client_ip = kong.client.get_ip(),
+            forwarded_for = kong.request.get_header("X-Forwarded-For"),
+            user_agent = kong.request.get_header("User-Agent"),
+            method = kong.request.get_method(),
+            path = kong.request.get_path(),
+            query = kong.request.get_raw_query(),
+            status = kong.response.get_status(),
+            latency_ms = kong.ctx.shared.response_latency,
+            request_size = kong.request.get_size(),
+            response_size = kong.response.get_size(),
+            consumer = kong.ctx.shared.authenticated_consumer and kong.ctx.shared.authenticated_consumer.username or "anonymous",
+            route = kong.ctx.shared.route and kong.ctx.shared.route.name or "unknown",
+            service = kong.ctx.shared.service and kong.ctx.shared.service.name or "unknown",
+            request_id = kong.ctx.shared.request_id or kong.request.get_header("X-Request-ID"),
+            security_flags = {
+              suspicious_user_agent = string.match(kong.request.get_header("User-Agent") or "", "bot|crawler|scanner"),
+              large_payload = kong.request.get_size() > 1048576, -- 1MB
+              high_frequency = kong.ctx.shared.rate_limit_remaining and kong.ctx.shared.rate_limit_remaining < 10
+            }
+          })
+          
+  # === ADVANCED CORS - PRODUCTION ===
+  
+  - name: cors
+    config:
+      origins: 
+        # Production-only origins
+        - "https://eagle.fusionx.pro"
+        - "https://app.eagle.fusionx.pro"
+        - "https://admin.eagle.fusionx.pro"
+        
+      methods: 
+        - "GET"
+        - "POST"
+        - "PUT"
+        - "PATCH"
+        - "DELETE"
+        - "OPTIONS"
+        
+      headers:
+        # Minimal required headers only
+        - "Accept"
+        - "Authorization"
+        - "Content-Type"
+        - "X-Request-ID"
+        - "X-CSRF-Token"
+        
+      exposed_headers:
+        - "X-Request-ID"
+        - "X-Rate-Limit-Remaining"
+        - "X-API-Version"
+        
+      credentials: true
+      max_age: 86400
+      preflight_continue: false
+      
+  # === SESSION SECURITY ===
+  
+  - name: session
+    config:
+      storage: "redis"
+      redis:
+        host: "redis-master"
+        port: 6379
+        database: 4
+        password: "${REDIS_PASSWORD}"
+        ssl: true
+        ssl_verify: true
+        timeout: 2000
+      cookie:
+        name: "eagle-session"
+        path: "/"
+        domain: ".fusionx.pro"
+        same_site: "Strict"
+        http_only: true
+        secure: true
+        max_age: 1800  # 30 minutes
+        renew: 300     # 5 minutes
+      logout_methods: ["POST", "DELETE"]
+      logout_query_arg: "logout"
+      
+  # === REQUEST TERMINATION FOR EMERGENCIES ===
+  
+  - name: request-termination
+    enabled: false  # Can be enabled dynamically
+    config:
+      status_code: 503
+      content_type: "application/json"
+      body: |
+        {
+          "error": "Service temporarily unavailable",
+          "code": "MAINTENANCE_MODE",
+          "message": "The Eagle system is currently under maintenance for security updates. Please try again later.",
+          "timestamp": "{{.timestamp}}",
+          "request_id": "{{.request_id}}",
+          "support": "security@fusionx.pro",
+          "estimated_recovery": "{{.estimated_recovery}}"
+        }
+        
+# Route-specific security configurations
+routes:
+  # Security status endpoint
+  - name: security-status
+    service: ms-orchestrator
+    paths: ["/api/v1/security/status"]
+    methods: ["GET"]
+    tags: ["security", "monitoring"]
+    
+  # Security headers test endpoint
+  - name: security-headers-test
+    service: ms-orchestrator
+    paths: ["/api/v1/security/headers"]
+    methods: ["GET"]
+    tags: ["security", "testing"]
+
+# Route-specific plugins
+plugins:
+  # Security status endpoint - admin only
+  - name: jwt
+    route: security-status
+    config:
+      claims_to_verify: ["exp", "iss", "aud", "roles"]
+      key_claim_name: "iss"
+      
+  - name: acl
+    route: security-status
+    config:
+      allow: ["admin-panel"]
+      
+  # Security headers test - no auth for testing
+  - name: response-transformer
+    route: security-headers-test
+    config:
+      add:
+        headers:
+          - "X-Security-Test:passed"
+          - "X-Headers-Applied:true"
+          - "X-Test-Timestamp:{{.timestamp}}"
+
+# Additional consumers for security testing
+consumers:
+  # Security testing consumer
+  - username: security-tester
+    tags: ["security", "testing", "internal"]
+    custom_id: "security-test-user"
+    
+# ACL for security testing
+acls:
+  - consumer: security-tester
+    group: "security-testing"
+    tags: ["security", "testing"]
+
+# Key auth for security testing
+keyauth_credentials:
+  - consumer: security-tester
+    key: "security-test-key-2024"
+    tags: ["security", "testing", "internal"]

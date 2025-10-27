@@ -1,0 +1,303 @@
+{
+  "realm": "eagle",
+  "enabled": true,
+  "displayName": "Eagle Solo-Full Realm",
+  "displayNameHtml": "<div class=\"kc-logo-text\"><span>Eagle Solo-Full</span></div>",
+  
+  "accessTokenLifespan": 600,
+  "accessTokenLifespanForImplicitFlow": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "refreshTokenMaxReuse": 0,
+  "revokeRefreshToken": true,
+  "refreshTokenMaxReuse": 0,
+  
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "verifyEmail": true,
+  
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "waitIncrementSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "maxDeltaTimeSeconds": 43200,
+  "failureFactor": 5,
+  
+  "defaultSignatureAlgorithm": "RS256",
+  "revokeRefreshToken": true,
+  "refreshTokenMaxReuse": 0,
+  
+  "eventsEnabled": true,
+  "eventsListeners": ["jboss-logging"],
+  "enabledEventTypes": [
+    "LOGIN", "LOGIN_ERROR", "LOGOUT", "LOGOUT_ERROR",
+    "CLIENT_LOGIN", "CLIENT_LOGIN_ERROR",
+    "UPDATE_PASSWORD", "UPDATE_PASSWORD_ERROR",
+    "VERIFY_EMAIL", "VERIFY_EMAIL_ERROR"
+  ],
+  "adminEventsEnabled": true,
+  "adminEventsDetailsEnabled": true,
+  
+  "roles": {
+    "realm": [
+      {
+        "name": "PLD_OFFICER",
+        "description": "PLD Officer - Full access to cases, alerts, and approvals"
+      },
+      {
+        "name": "REPORTING_APPROVER", 
+        "description": "Reporting Approver - Approve reports and read access"
+      },
+      {
+        "name": "AUDITOR",
+        "description": "Auditor - Read access to all data and audit trails"
+      },
+      {
+        "name": "ANALYST_L1",
+        "description": "Level 1 Analyst - Basic analysis capabilities"
+      },
+      {
+        "name": "ANALYST_L2", 
+        "description": "Level 2 Analyst - Advanced analysis capabilities"
+      },
+      {
+        "name": "ANALYST_L3",
+        "description": "Level 3 Analyst - Senior analysis capabilities"
+      },
+      {
+        "name": "TENANT_ADMIN",
+        "description": "Tenant Administrator - Manage users and configurations"
+      },
+      {
+        "name": "VIEWER",
+        "description": "Viewer - Read-only access to basic data"
+      }
+    ]
+  },
+  
+  "groups": [
+    {
+      "name": "Tenant Admins",
+      "path": "/Tenant Admins",
+      "realmRoles": ["TENANT_ADMIN"]
+    },
+    {
+      "name": "PLD Officers", 
+      "path": "/PLD Officers",
+      "realmRoles": ["PLD_OFFICER"]
+    },
+    {
+      "name": "Analysts L1",
+      "path": "/Analysts L1", 
+      "realmRoles": ["ANALYST_L1"]
+    },
+    {
+      "name": "Analysts L2",
+      "path": "/Analysts L2",
+      "realmRoles": ["ANALYST_L2"] 
+    },
+    {
+      "name": "Analysts L3",
+      "path": "/Analysts L3",
+      "realmRoles": ["ANALYST_L3"]
+    },
+    {
+      "name": "Auditors",
+      "path": "/Auditors",
+      "realmRoles": ["AUDITOR"]
+    },
+    {
+      "name": "Viewers", 
+      "path": "/Viewers",
+      "realmRoles": ["VIEWER"]
+    }
+  ],
+  
+  "clients": [
+    {
+      "clientId": "eagle-frontend",
+      "name": "Eagle Frontend SPA",
+      "description": "Single Page Application for Eagle Platform",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "eagle-frontend-secret",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "authorizationServicesEnabled": false,
+      "redirectUris": [
+        "http://localhost:3001/*",
+        "http://localhost:5173/*",
+        "https://eagle.fusionx.pro/*"
+      ],
+      "webOrigins": [
+        "http://localhost:3001",
+        "http://localhost:5173", 
+        "https://eagle.fusionx.pro"
+      ],
+      "protocol": "openid-connect",
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:3001/*##http://localhost:5173/*##https://eagle.fusionx.pro/*"
+      }
+    },
+    {
+      "clientId": "ms-cases-api",
+      "name": "Cases Microservice API",
+      "description": "Microservice for case management",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret", 
+      "secret": "ms-cases-api-secret",
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "protocol": "openid-connect",
+      "attributes": {
+        "access.token.lifespan": "600"
+      }
+    },
+    {
+      "clientId": "ms-alerts-api",
+      "name": "Alerts Microservice API", 
+      "description": "Microservice for alert management",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "ms-alerts-api-secret", 
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "protocol": "openid-connect",
+      "attributes": {
+        "access.token.lifespan": "600"
+      }
+    },
+    {
+      "clientId": "ms-reports-api",
+      "name": "Reports Microservice API",
+      "description": "Microservice for report generation",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "ms-reports-api-secret",
+      "publicClient": false, 
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "protocol": "openid-connect",
+      "attributes": {
+        "access.token.lifespan": "600"
+      }
+    },
+    {
+      "clientId": "ms-customers-api",
+      "name": "Customers Microservice API",
+      "description": "Microservice for customer management", 
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "ms-customers-api-secret",
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "protocol": "openid-connect",
+      "attributes": {
+        "access.token.lifespan": "600"
+      }
+    }
+  ],
+  
+  "clientScopes": [
+    {
+      "name": "microservice-communication",
+      "description": "Scope for service-to-service communication",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true"
+      }
+    }
+  ],
+  
+  "users": [
+    {
+      "username": "admin",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "System",
+      "lastName": "Administrator", 
+      "email": "admin@eagle.local",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin123",
+          "temporary": false
+        }
+      ],
+      "groups": ["/Tenant Admins"]
+    },
+    {
+      "username": "pld.officer",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "PLD",
+      "lastName": "Officer",
+      "email": "pld.officer@eagle.local", 
+      "credentials": [
+        {
+          "type": "password",
+          "value": "pld123",
+          "temporary": false
+        }
+      ],
+      "groups": ["/PLD Officers"]
+    },
+    {
+      "username": "analyst.l2",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Senior",
+      "lastName": "Analyst",
+      "email": "analyst.l2@eagle.local",
+      "credentials": [
+        {
+          "type": "password", 
+          "value": "analyst123",
+          "temporary": false
+        }
+      ],
+      "groups": ["/Analysts L2"]
+    },
+    {
+      "username": "auditor",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "System",
+      "lastName": "Auditor",
+      "email": "auditor@eagle.local",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "auditor123", 
+          "temporary": false
+        }
+      ],
+      "groups": ["/Auditors"]
+    }
+  ]
+}

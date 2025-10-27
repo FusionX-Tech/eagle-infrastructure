@@ -1,0 +1,220 @@
+# Política de autorização para MS-Orchestrator
+# Permite acesso do API Gateway e outros microserviços autorizados
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: ms-orchestrator-authz
+  namespace: eagle-services
+spec:
+  selector:
+    matchLabels:
+      app: ms-orchestrator
+  rules:
+  # Permitir acesso do API Gateway (Kong)
+  - from:
+    - source:
+        namespaces: ["default", "kong"]
+  # Permitir acesso de outros microserviços do sistema
+  - from:
+    - source:
+        principals: 
+        - "cluster.local/ns/eagle-services/sa/ms-alert"
+        - "cluster.local/ns/eagle-services/sa/ms-enrichment"
+  # Permitir health checks
+  - to:
+    - operation:
+        methods: ["GET"]
+        paths: ["/actuator/health", "/actuator/health/*"]
+  # Permitir operações de criação de alertas
+  - to:
+    - operation:
+        methods: ["POST"]
+        paths: ["/api/v1/alerts/create"]
+  # Permitir consulta de status
+  - to:
+    - operation:
+        methods: ["GET"]
+        paths: ["/api/v1/alerts/process/*/status"]
+---
+# Política de autorização para MS-Alert
+# Permite acesso apenas do MS-Orchestrator e MS-Enrichment
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: ms-alert-authz
+  namespace: eagle-services
+spec:
+  selector:
+    matchLabels:
+      app: ms-alert
+  rules:
+  # Permitir acesso do MS-Orchestrator
+  - from:
+    - source:
+        principals: ["cluster.local/ns/eagle-services/sa/ms-orchestrator"]
+  # Permitir acesso do MS-Enrichment para atualizações
+  - from:
+    - source:
+        principals: ["cluster.local/ns/eagle-services/sa/ms-enrichment"]
+  # Permitir health checks
+  - to:
+    - operation:
+        methods: ["GET"]
+        paths: ["/actuator/health", "/actuator/health/*"]
+  # Permitir operações internas de alertas
+  - to:
+    - operation:
+        methods: ["POST", "PUT", "GET"]
+        paths: ["/api/v1/alerts/*"]
+---
+# Política de autorização para MS-Customer
+# Permite acesso do MS-Alert e MS-Enrichment
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: ms-customer-authz
+  namespace: eagle-services
+spec:
+  selector:
+    matchLabels:
+      app: ms-customer
+  rules:
+  # Permitir acesso do MS-Alert para validação de clientes
+  - from:
+    - source:
+        principals: ["cluster.local/ns/eagle-services/sa/ms-alert"]
+  # Permitir acesso do MS-Enrichment para dados de enriquecimento
+  - from:
+    - source:
+        principals: ["cluster.local/ns/eagle-services/sa/ms-enrichment"]
+  # Permitir health checks
+  - to:
+    - operation:
+        methods: ["GET"]
+        paths: ["/actuator/health", "/actuator/health/*"]
+  # Permitir consultas de dados de cliente
+  - to:
+    - operation:
+        methods: ["GET", "POST"]
+        paths: ["/api/v1/customers/*", "/api/v1/enrichment/*"]
+---
+# Política de autorização para MS-Transaction
+# Permite acesso apenas do MS-Enrichment
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: ms-transaction-authz
+  namespace: eagle-services
+spec:
+  selector:
+    matchLabels:
+      app: ms-transaction
+  rules:
+  # Permitir acesso do MS-Enrichment
+  - from:
+    - source:
+        principals: ["cluster.local/ns/eagle-services/sa/ms-enrichment"]
+  # Permitir health checks
+  - to:
+    - operation:
+        methods: ["GET"]
+        paths: ["/actuator/health", "/actuator/health/*"]
+  # Permitir consultas de dados transacionais
+  - to:
+    - operation:
+        methods: ["GET", "POST"]
+        paths: ["/api/v1/transactions/*", "/api/v1/analysis/*"]
+---
+# Política de autorização para MS-API
+# Permite acesso apenas do MS-Enrichment
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: ms-api-authz
+  namespace: eagle-services
+spec:
+  selector:
+    matchLabels:
+      app: ms-api
+  rules:
+  # Permitir acesso do MS-Enrichment
+  - from:
+    - source:
+        principals: ["cluster.local/ns/eagle-services/sa/ms-enrichment"]
+  # Permitir health checks
+  - to:
+    - operation:
+        methods: ["GET"]
+        paths: ["/actuator/health", "/actuator/health/*"]
+  # Permitir consultas a APIs externas
+  - to:
+    - operation:
+        methods: ["GET", "POST"]
+        paths: ["/api/v1/external/*", "/api/v1/cache/*"]
+---
+# Política de autorização para MS-Enrichment
+# Permite acesso do MS-Alert e comunicação com outros microserviços
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: ms-enrichment-authz
+  namespace: eagle-services
+spec:
+  selector:
+    matchLabels:
+      app: ms-enrichment
+  rules:
+  # Permitir acesso do MS-Alert
+  - from:
+    - source:
+        principals: ["cluster.local/ns/eagle-services/sa/ms-alert"]
+  # Permitir health checks
+  - to:
+    - operation:
+        methods: ["GET"]
+        paths: ["/actuator/health", "/actuator/health/*"]
+  # Permitir operações de enriquecimento
+  - to:
+    - operation:
+        methods: ["POST", "PUT"]
+        paths: ["/api/v1/enrichment/*"]
+---
+# Política global de negação (deny-all) como fallback
+# Esta política nega todo o tráfego que não foi explicitamente permitido
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: deny-all-default
+  namespace: eagle-services
+spec:
+  # Sem regras = negar tudo por padrão
+  # As políticas específicas acima sobrescrevem esta regra
+---
+# Política para permitir comunicação com serviços de infraestrutura
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-infrastructure
+  namespace: eagle-services
+spec:
+  rules:
+  # Permitir acesso a PostgreSQL
+  - to:
+    - operation:
+        ports: ["5432", "5433", "5434"]
+  # Permitir acesso a Redis
+  - to:
+    - operation:
+        ports: ["6379", "6380"]
+  # Permitir acesso a Keycloak
+  - to:
+    - operation:
+        ports: ["8081"]
+  # Permitir acesso a Vault
+  - to:
+    - operation:
+        ports: ["8200"]
+  # Permitir acesso a LocalStack (SQS)
+  - to:
+    - operation:
+        ports: ["4566"]

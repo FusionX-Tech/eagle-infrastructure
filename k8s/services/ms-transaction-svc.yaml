@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ms-transaction
+  namespace: eagle-services
+  labels:
+    app: ms-transaction
+    component: transaction-analytics
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8088"
+    prometheus.io/path: "/actuator/prometheus"
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 8087
+    targetPort: http
+    protocol: TCP
+  - name: management
+    port: 8088
+    targetPort: management
+    protocol: TCP
+  selector:
+    app: ms-transaction
+    version: v1
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ms-transaction-headless
+  namespace: eagle-services
+  labels:
+    app: ms-transaction
+    component: transaction-analytics
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+  - name: http
+    port: 8087
+    targetPort: http
+    protocol: TCP
+  selector:
+    app: ms-transaction
+    version: v1

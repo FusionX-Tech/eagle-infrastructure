@@ -1,0 +1,531 @@
+# Redis Cluster Cross-Region Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-cluster-config
+  namespace: eagle-services
+data:
+  redis-primary.conf: |
+    # Redis Primary Configuration for Cross-Region Replication
+    
+    # Network
+    bind 0.0.0.0
+    port 6379
+    protected-mode no
+    
+    # General
+    daemonize no
+    supervised no
+    pidfile /var/run/redis_6379.pid
+    loglevel notice
+    logfile ""
+    
+    # Persistence
+    save 900 1
+    save 300 10
+    save 60 10000
+    stop-writes-on-bgsave-error yes
+    rdbcompression yes
+    rdbchecksum yes
+    dbfilename dump.rdb
+    dir /data
+    
+    # AOF
+    appendonly yes
+    appendfilename "appendonly.aof"
+    appendfsync everysec
+    no-appendfsync-on-rewrite no
+    auto-aof-rewrite-percentage 100
+    auto-aof-rewrite-min-size 64mb
+    
+    # Replication
+    replica-serve-stale-data yes
+    replica-read-only yes
+    repl-diskless-sync no
+    repl-diskless-sync-delay 5
+    repl-ping-replica-period 10
+    repl-timeout 60
+    repl-disable-tcp-nodelay no
+    repl-backlog-size 1mb
+    repl-backlog-ttl 3600
+    
+    # Memory management
+    maxmemory 1gb
+    maxmemory-policy allkeys-lru
+    maxmemory-samples 5
+    
+    # Lazy freeing
+    lazyfree-lazy-eviction no
+    lazyfree-lazy-expire no
+    lazyfree-lazy-server-del no
+    replica-lazy-flush no
+    
+    # Security
+    requirepass ${REDIS_PASSWORD}
+    
+    # Clients
+    timeout 300
+    tcp-keepalive 300
+    tcp-backlog 511
+    
+    # Performance
+    hz 10
+    
+  redis-replica.conf: |
+    # Redis Replica Configuration for Cross-Region Replication
+    
+    # Network
+    bind 0.0.0.0
+    port 6379
+    protected-mode no
+    
+    # General
+    daemonize no
+    supervised no
+    pidfile /var/run/redis_6379.pid
+    loglevel notice
+    logfile ""
+    
+    # Replication
+    replicaof redis-primary-service 6379
+    masterauth ${REDIS_PASSWORD}
+    replica-serve-stale-data yes
+    replica-read-only yes
+    repl-diskless-sync no
+    repl-diskless-sync-delay 5
+    repl-ping-replica-period 10
+    repl-timeout 60
+    repl-disable-tcp-nodelay no
+    
+    # Persistence (reduced for replica)
+    save 1800 1
+    save 600 10
+    save 300 100
+    stop-writes-on-bgsave-error yes
+    rdbcompression yes
+    rdbchecksum yes
+    dbfilename dump-replica.rdb
+    dir /data
+    
+    # AOF (disabled for replica to reduce I/O)
+    appendonly no
+    
+    # Memory management
+    maxmemory 1gb
+    maxmemory-policy allkeys-lru
+    maxmemory-samples 5
+    
+    # Security
+    requirepass ${REDIS_PASSWORD}
+    
+    # Clients
+    timeout 300
+    tcp-keepalive 300
+    tcp-backlog 511
+    
+    # Performance
+    hz 10
+    
+  redis-sentinel.conf: |
+    # Redis Sentinel Configuration for High Availability
+    
+    port 26379
+    bind 0.0.0.0
+    
+    # Sentinel configuration
+    sentinel monitor eagle-redis redis-primary-service 6379 2
+    sentinel auth-pass eagle-redis ${REDIS_PASSWORD}
+    sentinel down-after-milliseconds eagle-redis 5000
+    sentinel parallel-syncs eagle-redis 1
+    sentinel failover-timeout eagle-redis 10000
+    
+    # Notification scripts
+    sentinel notification-script eagle-redis /scripts/notify.sh
+    sentinel client-reconfig-script eagle-redis /scripts/reconfig.sh
+    
+    # Logging
+    logfile /var/log/sentinel.log
+    loglevel notice
+    
+  notify.sh: |
+    #!/bin/bash
+    # Notification script for Redis Sentinel events
+    
+    EVENT_TYPE=$1
+    EVENT_NAME=$2
+    
+    echo "$(date): Redis Sentinel Event - Type: $EVENT_TYPE, Name: $EVENT_NAME" >> /var/log/sentinel-events.log
+    
+    # Send notification to monitoring system
+    curl -X POST "${WEBHOOK_URL}" -H "Content-Type: application/json" -d "{
+        \"text\": \"🔴 Redis Sentinel Alert: $EVENT_TYPE - $EVENT_NAME\",
+        \"severity\": \"warning\",
+        \"timestamp\": \"$(date -Iseconds)\",
+        \"service\": \"redis-sentinel\"
+    }" || true
+    
+  reconfig.sh: |
+    #!/bin/bash
+    # Reconfiguration script for Redis failover
+    
+    MASTER_NAME=$1
+    ROLE=$2
+    STATE=$3
+    FROM_IP=$4
+    FROM_PORT=$5
+    TO_IP=$6
+    TO_PORT=$7
+    
+    echo "$(date): Redis Failover - Master: $MASTER_NAME, Role: $ROLE, State: $STATE, From: $FROM_IP:$FROM_PORT, To: $TO_IP:$TO_PORT" >> /var/log/sentinel-reconfig.log
+    
+    # Update application configuration if needed
+    kubectl patch configmap redis-config -n eagle-services --type merge -p "{\"data\":{\"redis.master.host\":\"$TO_IP\",\"redis.master.port\":\"$TO_PORT\"}}" || true
+    
+    # Restart applications that need to reconnect
+    kubectl rollout restart deployment -l app.kubernetes.io/component=microservice -n eagle-services || true
+
+---
+# Redis Primary Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-primary
+  namespace: eagle-services
+  labels:
+    app: redis
+    role: primary
+    region: us-east-1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+      role: primary
+  template:
+    metadata:
+      labels:
+        app: redis
+        role: primary
+        region: us-east-1
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: redis-secret
+              key: password
+        ports:
+        - containerPort: 6379
+          name: redis
+        command:
+        - redis-server
+        - /etc/redis/redis-primary.conf
+        volumeMounts:
+        - name: redis-data
+          mountPath: /data
+        - name: redis-config
+          mountPath: /etc/redis
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          exec:
+            command:
+            - redis-cli
+            - -a
+            - $(REDIS_PASSWORD)
+            - ping
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - -a
+            - $(REDIS_PASSWORD)
+            - ping
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: redis-data
+        persistentVolumeClaim:
+          claimName: redis-primary-pvc
+      - name: redis-config
+        configMap:
+          name: redis-cluster-config
+
+---
+# Redis Replica Deployment (US-West-2)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-replica-west
+  namespace: eagle-services
+  labels:
+    app: redis
+    role: replica
+    region: us-west-2
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: redis
+      role: replica
+      region: us-west-2
+  template:
+    metadata:
+      labels:
+        app: redis
+        role: replica
+        region: us-west-2
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: redis-secret
+              key: password
+        ports:
+        - containerPort: 6379
+          name: redis
+        command:
+        - redis-server
+        - /etc/redis/redis-replica.conf
+        volumeMounts:
+        - name: redis-data
+          mountPath: /data
+        - name: redis-config
+          mountPath: /etc/redis
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "150m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          exec:
+            command:
+            - redis-cli
+            - -a
+            - $(REDIS_PASSWORD)
+            - ping
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - -a
+            - $(REDIS_PASSWORD)
+            - ping
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: redis-data
+        persistentVolumeClaim:
+          claimName: redis-replica-west-pvc
+      - name: redis-config
+        configMap:
+          name: redis-cluster-config
+
+---
+# Redis Sentinel Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-sentinel
+  namespace: eagle-services
+  labels:
+    app: redis-sentinel
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: redis-sentinel
+  template:
+    metadata:
+      labels:
+        app: redis-sentinel
+    spec:
+      containers:
+      - name: sentinel
+        image: redis:7-alpine
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: redis-secret
+              key: password
+        - name: WEBHOOK_URL
+          valueFrom:
+            secretKeyRef:
+              name: notification-secrets
+              key: webhook-url
+        ports:
+        - containerPort: 26379
+          name: sentinel
+        command:
+        - redis-sentinel
+        - /etc/redis/redis-sentinel.conf
+        volumeMounts:
+        - name: redis-config
+          mountPath: /etc/redis
+        - name: sentinel-scripts
+          mountPath: /scripts
+        - name: sentinel-logs
+          mountPath: /var/log
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+        livenessProbe:
+          exec:
+            command:
+            - redis-cli
+            - -p
+            - "26379"
+            - ping
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - -p
+            - "26379"
+            - ping
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: redis-config
+        configMap:
+          name: redis-cluster-config
+      - name: sentinel-scripts
+        configMap:
+          name: redis-cluster-config
+          defaultMode: 0755
+      - name: sentinel-logs
+        emptyDir: {}
+
+---
+# Services
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-primary-service
+  namespace: eagle-services
+  labels:
+    app: redis
+    role: primary
+spec:
+  selector:
+    app: redis
+    role: primary
+  ports:
+  - port: 6379
+    targetPort: 6379
+    name: redis
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-replica-west-service
+  namespace: eagle-services
+  labels:
+    app: redis
+    role: replica
+    region: us-west-2
+spec:
+  selector:
+    app: redis
+    role: replica
+    region: us-west-2
+  ports:
+  - port: 6379
+    targetPort: 6379
+    name: redis
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-sentinel-service
+  namespace: eagle-services
+  labels:
+    app: redis-sentinel
+spec:
+  selector:
+    app: redis-sentinel
+  ports:
+  - port: 26379
+    targetPort: 26379
+    name: sentinel
+  type: ClusterIP
+
+---
+# Persistent Volume Claims
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-primary-pvc
+  namespace: eagle-services
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: gp3
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-replica-west-pvc
+  namespace: eagle-services
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: gp3
+
+---
+# Redis Secret
+apiVersion: v1
+kind: Secret
+metadata:
+  name: redis-secret
+  namespace: eagle-services
+type: Opaque
+data:
+  password: cmVkaXNfcGFzc3dvcmQ=  # redis_password (base64 encoded)
+
+---
+# Notification Secret
+apiVersion: v1
+kind: Secret
+metadata:
+  name: notification-secrets
+  namespace: eagle-services
+type: Opaque
+data:
+  webhook-url: aHR0cHM6Ly9ob29rcy5zbGFjay5jb20vc2VydmljZXMvVDAwMDAwMDAwL0IwMDAwMDAwMC9YWFhYWFhYWFhYWFhYWFhYWFhYWFhY  # webhook URL (base64 encoded)

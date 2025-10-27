@@ -1,0 +1,173 @@
+# Custom Metrics Configuration for SQS Queue Depth and Application Metrics
+# This configuration enables HPA to scale based on SQS queue depth and other custom metrics
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: custom-metrics-config
+  namespace: eagle-services
+  labels:
+    app: eagle-services
+    component: monitoring
+data:
+  # Prometheus adapter configuration for custom metrics
+  config.yaml: |
+    rules:
+    # SQS Queue Depth Metrics
+    - seriesQuery: 'sqs_messages_visible{queue_name!="",namespace!="",pod!=""}'
+      resources:
+        overrides:
+          namespace: {resource: "namespace"}
+          pod: {resource: "pod"}
+      name:
+        matches: "^sqs_messages_visible"
+        as: "sqs_messages_visible_${1}"
+      metricsQuery: 'avg_over_time(sqs_messages_visible{queue_name="<<.LabelMatchers>>"}[2m])'
+    
+    # Database Connection Pool Metrics
+    - seriesQuery: 'hikaricp_connections_active{namespace!="",pod!=""}'
+      resources:
+        overrides:
+          namespace: {resource: "namespace"}
+          pod: {resource: "pod"}
+      name:
+        matches: "^hikaricp_connections_active"
+        as: "hikaricp_connections_active"
+      metricsQuery: 'avg_over_time(hikaricp_connections_active{<<.LabelMatchers>>}[2m])'
+    
+    # Redis Cache Hit Ratio (inverted for scaling)
+    - seriesQuery: 'redis_cache_hit_ratio{namespace!="",pod!=""}'
+      resources:
+        overrides:
+          namespace: {resource: "namespace"}
+          pod: {resource: "pod"}
+      name:
+        matches: "^redis_cache_hit_ratio"
+        as: "redis_cache_hit_ratio_inverted"
+      metricsQuery: '1 - avg_over_time(redis_cache_hit_ratio{<<.LabelMatchers>>}[5m])'
+    
+    # Database Query Duration
+    - seriesQuery: 'database_query_duration_seconds{namespace!="",pod!=""}'
+      resources:
+        overrides:
+          namespace: {resource: "namespace"}
+          pod: {resource: "pod"}
+      name:
+        matches: "^database_query_duration_seconds"
+        as: "database_query_duration_seconds_avg"
+      metricsQuery: 'avg_over_time(database_query_duration_seconds{<<.LabelMatchers>>}[2m])'
+    
+    # HTTP Client Request Duration (for external APIs)
+    - seriesQuery: 'http_client_requests_duration_seconds{namespace!="",pod!=""}'
+      resources:
+        overrides:
+          namespace: {resource: "namespace"}
+          pod: {resource: "pod"}
+      name:
+        matches: "^http_client_requests_duration_seconds"
+        as: "http_client_requests_duration_seconds_avg"
+      metricsQuery: 'avg_over_time(http_client_requests_duration_seconds{<<.LabelMatchers>>}[2m])'
+    
+    # Rate Limiting Pressure
+    - seriesQuery: 'rate_limit_requests_total{namespace!="",pod!=""}'
+      resources:
+        overrides:
+          namespace: {resource: "namespace"}
+          pod: {resource: "pod"}
+      name:
+        matches: "^rate_limit_requests_total"
+        as: "rate_limit_pressure_ratio"
+      metricsQuery: 'rate(rate_limit_requests_total{status="limited",<<.LabelMatchers>>}[2m]) / rate(rate_limit_requests_total{<<.LabelMatchers>>}[2m])'
+    
+    # Enrichment Active Processes
+    - seriesQuery: 'enrichment_active_processes{namespace!="",pod!=""}'
+      resources:
+        overrides:
+          namespace: {resource: "namespace"}
+          pod: {resource: "pod"}
+      name:
+        matches: "^enrichment_active_processes"
+        as: "enrichment_active_processes"
+      metricsQuery: 'avg_over_time(enrichment_active_processes{<<.LabelMatchers>>}[2m])'
+    
+    # Enrichment Duration
+    - seriesQuery: 'enrichment_duration_seconds{namespace!="",pod!=""}'
+      resources:
+        overrides:
+          namespace: {resource: "namespace"}
+          pod: {resource: "pod"}
+      name:
+        matches: "^enrichment_duration_seconds"
+        as: "enrichment_duration_seconds_avg"
+      metricsQuery: 'avg_over_time(enrichment_duration_seconds{<<.LabelMatchers>>}[5m])'
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: custom-metrics-apiserver
+  namespace: eagle-services
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: custom-metrics-server-resources
+rules:
+- apiGroups:
+  - custom.metrics.k8s.io
+  resources: ["*"]
+  verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: custom-metrics-resource-reader
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - namespaces
+  - pods
+  - services
+  verbs:
+  - get
+  - list
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: custom-metrics:system:auth-delegator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+- kind: ServiceAccount
+  name: custom-metrics-apiserver
+  namespace: eagle-services
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: custom-metrics-auth-reader
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: extension-apiserver-authentication-reader
+subjects:
+- kind: ServiceAccount
+  name: custom-metrics-apiserver
+  namespace: eagle-services
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: custom-metrics-resource-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: custom-metrics-resource-reader
+subjects:
+- kind: ServiceAccount
+  name: custom-metrics-apiserver
+  namespace: eagle-services

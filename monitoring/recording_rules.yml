@@ -1,0 +1,194 @@
+groups:
+  - name: eagle-recording-rules
+    interval: 30s
+    rules:
+      # HTTP request rate and error rate
+      - record: eagle:http_request_rate
+        expr: |
+          sum(rate(http_requests_total[5m])) by (service, method, status)
+
+      - record: eagle:http_error_rate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m])) by (service)
+          /
+          sum(rate(http_requests_total[5m])) by (service)
+
+      - record: eagle:http_success_rate
+        expr: |
+          sum(rate(http_requests_total{status=~"2.."}[5m])) by (service)
+          /
+          sum(rate(http_requests_total[5m])) by (service)
+
+      # Response time percentiles
+      - record: eagle:http_request_duration_p50
+        expr: |
+          histogram_quantile(0.50, 
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (le, service)
+          )
+
+      - record: eagle:http_request_duration_p95
+        expr: |
+          histogram_quantile(0.95, 
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (le, service)
+          )
+
+      - record: eagle:http_request_duration_p99
+        expr: |
+          histogram_quantile(0.99, 
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (le, service)
+          )
+
+      # Alert creation metrics
+      - record: eagle:alerts_created_rate
+        expr: |
+          sum(rate(alerts_created_total[5m])) by (service, status)
+
+      - record: eagle:alerts_enrichment_duration_p95
+        expr: |
+          histogram_quantile(0.95, 
+            sum(rate(alerts_enrichment_duration_seconds_bucket[5m])) by (le, service)
+          )
+
+      - record: eagle:alerts_success_rate
+        expr: |
+          sum(rate(alerts_created_total{status="success"}[5m])) by (service)
+          /
+          sum(rate(alerts_created_total[5m])) by (service)
+
+      # Database metrics
+      - record: eagle:db_connection_pool_usage
+        expr: |
+          hikaricp_connections_active / hikaricp_connections_max
+
+      - record: eagle:db_query_duration_p95
+        expr: |
+          histogram_quantile(0.95, 
+            sum(rate(spring_data_repository_invocations_seconds_bucket[5m])) by (le, repository)
+          )
+
+      # Cache metrics
+      - record: eagle:cache_hit_rate
+        expr: |
+          sum(rate(spring_cache_gets{result="hit"}[5m])) by (cache_name)
+          /
+          sum(rate(spring_cache_gets[5m])) by (cache_name)
+
+      - record: eagle:cache_miss_rate
+        expr: |
+          sum(rate(spring_cache_gets{result="miss"}[5m])) by (cache_name)
+          /
+          sum(rate(spring_cache_gets[5m])) by (cache_name)
+
+      # SQS metrics
+      - record: eagle:sqs_message_processing_rate
+        expr: |
+          sum(rate(sqs_messages_processed_total[5m])) by (queue_name, status)
+
+      - record: eagle:sqs_message_processing_duration_p95
+        expr: |
+          histogram_quantile(0.95, 
+            sum(rate(sqs_message_processing_duration_seconds_bucket[5m])) by (le, queue_name)
+          )
+
+      # Resource utilization
+      - record: eagle:cpu_usage_by_pod
+        expr: |
+          sum(rate(container_cpu_usage_seconds_total{container!="POD",container!=""}[5m])) by (pod, namespace)
+
+      - record: eagle:memory_usage_by_pod
+        expr: |
+          sum(container_memory_working_set_bytes{container!="POD",container!=""}) by (pod, namespace)
+
+      - record: eagle:cpu_utilization_percentage
+        expr: |
+          (
+            sum(rate(container_cpu_usage_seconds_total{container!="POD",container!=""}[5m])) by (pod)
+            /
+            sum(container_spec_cpu_quota{container!="POD",container!=""}/container_spec_cpu_period{container!="POD",container!=""}) by (pod)
+          ) * 100
+
+      - record: eagle:memory_utilization_percentage
+        expr: |
+          (
+            sum(container_memory_working_set_bytes{container!="POD",container!=""}) by (pod)
+            /
+            sum(container_spec_memory_limit_bytes{container!="POD",container!=""}) by (pod)
+          ) * 100
+
+      # External API metrics
+      - record: eagle:external_api_success_rate
+        expr: |
+          sum(rate(external_api_requests_total{status=~"2.."}[5m])) by (api_name)
+          /
+          sum(rate(external_api_requests_total[5m])) by (api_name)
+
+      - record: eagle:external_api_response_time_p95
+        expr: |
+          histogram_quantile(0.95, 
+            sum(rate(external_api_request_duration_seconds_bucket[5m])) by (le, api_name)
+          )
+
+      # Business metrics aggregations
+      - record: eagle:daily_alerts_created
+        expr: |
+          increase(alerts_created_total{status="success"}[24h])
+
+      - record: eagle:hourly_alerts_created
+        expr: |
+          increase(alerts_created_total{status="success"}[1h])
+
+      - record: eagle:enrichment_success_rate_daily
+        expr: |
+          increase(alerts_enrichment_total{status="success"}[24h])
+          /
+          increase(alerts_enrichment_total[24h])
+
+      # Throughput metrics
+      - record: eagle:total_throughput_rps
+        expr: |
+          sum(eagle:http_request_rate) by (service)
+
+      - record: eagle:peak_throughput_rps_1h
+        expr: |
+          max_over_time(eagle:total_throughput_rps[1h])
+
+      # Availability metrics (SLA)
+      - record: eagle:service_availability_5m
+        expr: |
+          (
+            sum(rate(http_requests_total{status!~"5.."}[5m])) by (service)
+            /
+            sum(rate(http_requests_total[5m])) by (service)
+          ) * 100
+
+      - record: eagle:service_availability_1h
+        expr: |
+          avg_over_time(eagle:service_availability_5m[1h])
+
+      - record: eagle:service_availability_24h
+        expr: |
+          avg_over_time(eagle:service_availability_5m[24h])
+
+  - name: eagle-sla-metrics
+    interval: 60s
+    rules:
+      # SLA compliance metrics
+      - record: eagle:sla_response_time_compliance
+        expr: |
+          (
+            sum(rate(http_request_duration_seconds_bucket{le="1.0"}[5m])) by (service)
+            /
+            sum(rate(http_request_duration_seconds_bucket{le="+Inf"}[5m])) by (service)
+          ) * 100
+
+      - record: eagle:sla_error_budget_remaining
+        expr: |
+          (1 - (1 - eagle:service_availability_24h / 100)) * 100
+
+      - record: eagle:sla_alert_creation_time_compliance
+        expr: |
+          (
+            sum(rate(alerts_enrichment_duration_seconds_bucket{le="30.0"}[5m]))
+            /
+            sum(rate(alerts_enrichment_duration_seconds_bucket{le="+Inf"}[5m]))
+          ) * 100

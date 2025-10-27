@@ -1,0 +1,1066 @@
+# Kong Declarative Configuration for Eagle System - Development Environment
+_format_version: "3.0"
+_transform: true
+
+# Development Environment Configuration
+# This configuration is optimized for local development with Docker Compose
+# For production deployment, security settings should be reviewed and hardened
+
+# Services Configuration - All Microservices
+services:
+  # MS-Orchestrator - Main orchestration service
+  - name: ms-orchestrator
+    url: http://ms-orchestrator:8088
+    tags: ["microservice", "orchestrator", "public-api"]
+    connect_timeout: 60000
+    write_timeout: 60000
+    read_timeout: 60000
+    retries: 3
+    
+  # MS-Alert - Alert management service  
+  - name: ms-alert
+    url: http://ms-alert:8083
+    tags: ["microservice", "alert", "internal"]
+    connect_timeout: 30000
+    write_timeout: 30000
+    read_timeout: 30000
+    retries: 3
+    
+  # MS-Customer - Customer data service
+  - name: ms-customer
+    url: http://ms-customer:8085
+    tags: ["microservice", "customer", "internal"]
+    connect_timeout: 30000
+    write_timeout: 30000
+    read_timeout: 30000
+    retries: 3
+    
+  # MS-Transaction - Transaction analysis service
+  - name: ms-transaction
+    url: http://ms-transaction:8086
+    tags: ["microservice", "transaction", "internal"]
+    connect_timeout: 30000
+    write_timeout: 30000
+    read_timeout: 30000
+    retries: 3
+    
+  # MS-API - External API integration service
+  - name: ms-api
+    url: http://ms-api:8087
+    tags: ["microservice", "external-api", "internal"]
+    connect_timeout: 45000
+    write_timeout: 45000
+    read_timeout: 45000
+    retries: 3
+    
+  # MS-Enrichment - Data enrichment service
+  - name: ms-enrichment
+    url: http://ms-enrichment:8082
+    tags: ["microservice", "enrichment", "internal"]
+    connect_timeout: 60000
+    write_timeout: 60000
+    read_timeout: 60000
+    retries: 3
+
+# Routes Configuration - Comprehensive API Gateway Routes
+routes:
+  # === PUBLIC API ROUTES (MS-Orchestrator) ===
+  
+  # Alert Creation - Main public endpoint
+  - name: alert-creation
+    service: ms-orchestrator
+    paths: ["/api/v1/alerts/create"]
+    methods: ["POST"]
+    tags: ["public", "alert-creation", "authenticated"]
+    strip_path: false
+    preserve_host: false
+    
+  # Alert Process Status - Check processing status
+  - name: process-status
+    service: ms-orchestrator
+    paths: ["/api/v1/alerts/process/~"]
+    methods: ["GET"]
+    tags: ["public", "status", "authenticated"]
+    strip_path: false
+    
+  # Alert Process Statistics - Get processing statistics
+  - name: process-statistics
+    service: ms-orchestrator
+    paths: ["/api/v1/alerts/statistics"]
+    methods: ["GET"]
+    tags: ["public", "statistics", "authenticated"]
+    strip_path: false
+    
+  # === ALERT MANAGEMENT ROUTES (MS-Alert) ===
+  
+  # Alert Listing - Get alerts with pagination and filters
+  - name: alert-listing
+    service: ms-alert
+    paths: ["/api/v1/alerts"]
+    methods: ["GET"]
+    tags: ["public", "alert-query", "authenticated"]
+    strip_path: false
+    
+  # Alert Details - Get specific alert details
+  - name: alert-details
+    service: ms-alert
+    paths: ["/api/v1/alerts/~"]
+    methods: ["GET"]
+    tags: ["public", "alert-details", "authenticated"]
+    strip_path: false
+    
+  # Alert Export - Export alerts in various formats
+  - name: alert-export
+    service: ms-alert
+    paths: ["/api/v1/alerts/export"]
+    methods: ["POST"]
+    tags: ["public", "alert-export", "authenticated"]
+    strip_path: false
+    
+  # === CUSTOMER DATA ROUTES (MS-Customer) ===
+  
+  # Customer Search - Search customers by document
+  - name: customer-search
+    service: ms-customer
+    paths: ["/api/v1/customers/search"]
+    methods: ["GET"]
+    tags: ["public", "customer-search", "authenticated"]
+    strip_path: false
+    
+  # Customer Details - Get customer enriched data
+  - name: customer-details
+    service: ms-customer
+    paths: ["/api/v1/customers/~"]
+    methods: ["GET"]
+    tags: ["public", "customer-details", "authenticated"]
+    strip_path: false
+    
+  # === TRANSACTION ANALYSIS ROUTES (MS-Transaction) ===
+  
+  # Transaction Analysis - Get transaction analysis for customer
+  - name: transaction-analysis
+    service: ms-transaction
+    paths: ["/api/v1/transactions/analysis"]
+    methods: ["GET"]
+    tags: ["public", "transaction-analysis", "authenticated"]
+    strip_path: false
+    
+  # Transaction KPIs - Get transaction KPIs
+  - name: transaction-kpis
+    service: ms-transaction
+    paths: ["/api/v1/transactions/kpis"]
+    methods: ["GET"]
+    tags: ["public", "transaction-kpis", "authenticated"]
+    strip_path: false
+    
+  # === EXTERNAL DATA ROUTES (MS-API) ===
+  
+  # External Data Query - Query external data sources
+  - name: external-data-query
+    service: ms-api
+    paths: ["/api/v1/external/query"]
+    methods: ["POST"]
+    tags: ["public", "external-data", "authenticated"]
+    strip_path: false
+    
+  # External Data Status - Check external service status
+  - name: external-data-status
+    service: ms-api
+    paths: ["/api/v1/external/status"]
+    methods: ["GET"]
+    tags: ["public", "external-status", "authenticated"]
+    strip_path: false
+    
+  # === INTERNAL MICROSERVICE ROUTES (Protected with API Key) ===
+  
+  # MS-Alert Internal Communication
+  - name: ms-alert-internal
+    service: ms-alert
+    paths: ["/internal/alerts"]
+    methods: ["GET", "POST", "PUT", "DELETE"]
+    tags: ["internal", "alert", "api-key-auth"]
+    strip_path: false
+    
+  # MS-Customer Internal Communication
+  - name: ms-customer-internal
+    service: ms-customer
+    paths: ["/internal/customers"]
+    methods: ["GET", "POST", "PUT"]
+    tags: ["internal", "customer", "api-key-auth"]
+    strip_path: false
+    
+  # MS-Transaction Internal Communication
+  - name: ms-transaction-internal
+    service: ms-transaction
+    paths: ["/internal/transactions"]
+    methods: ["GET", "POST"]
+    tags: ["internal", "transaction", "api-key-auth"]
+    strip_path: false
+    
+  # MS-API Internal Communication
+  - name: ms-api-internal
+    service: ms-api
+    paths: ["/internal/external-data"]
+    methods: ["GET", "POST"]
+    tags: ["internal", "external-api", "api-key-auth"]
+    strip_path: false
+    
+  # MS-Enrichment Internal Communication
+  - name: ms-enrichment-internal
+    service: ms-enrichment
+    paths: ["/internal/enrichment"]
+    methods: ["GET", "POST", "PUT"]
+    tags: ["internal", "enrichment", "api-key-auth"]
+    strip_path: false
+    
+  # === HEALTH CHECK AND MONITORING ROUTES (No Auth) ===
+  
+  # Health Checks - All services health
+  - name: health-checks
+    service: ms-orchestrator
+    paths: ["/actuator/health", "/health"]
+    methods: ["GET"]
+    tags: ["health", "monitoring", "no-auth"]
+    strip_path: false
+    
+  # Metrics - Prometheus metrics endpoint
+  - name: metrics
+    service: ms-orchestrator
+    paths: ["/actuator/prometheus", "/metrics"]
+    methods: ["GET"]
+    tags: ["metrics", "monitoring", "no-auth"]
+    strip_path: false
+    
+  # Info - Service information
+  - name: service-info
+    service: ms-orchestrator
+    paths: ["/actuator/info", "/info"]
+    methods: ["GET"]
+    tags: ["info", "monitoring", "no-auth"]
+    strip_path: false
+    
+  # === DEVELOPMENT ROUTES ===
+  
+  # Kong Admin API Proxy for Development
+  - name: kong-admin-dev
+    service: ms-orchestrator
+    paths: ["/dev/kong-admin"]
+    methods: ["GET", "POST", "PUT", "DELETE"]
+    tags: ["development", "admin", "no-auth"]
+    strip_path: true
+    
+  # Development Status Endpoint
+  - name: dev-status
+    service: ms-orchestrator
+    paths: ["/dev/status"]
+    methods: ["GET"]
+    tags: ["development", "status", "no-auth"]
+    strip_path: false
+    
+  # Development Configuration Endpoint
+  - name: dev-config
+    service: ms-orchestrator
+    paths: ["/dev/config"]
+    methods: ["GET"]
+    tags: ["development", "config", "no-auth"]
+    strip_path: false
+
+# Consumers (API Clients) - JWT and API Key Authentication
+consumers:
+  # Frontend Web Application Consumer
+  - username: eagle-frontend
+    tags: ["frontend", "web", "jwt-auth"]
+    custom_id: "eagle-frontend-web"
+    
+  # Mobile Application Consumer  
+  - username: eagle-mobile
+    tags: ["frontend", "mobile", "jwt-auth"]
+    custom_id: "eagle-mobile-app"
+    
+  # Internal System Consumer (for microservice communication)
+  - username: eagle-internal
+    tags: ["internal", "system", "api-key-auth"]
+    custom_id: "eagle-internal-system"
+    
+  # Admin Panel Consumer
+  - username: eagle-admin
+    tags: ["admin", "web", "jwt-auth"]
+    custom_id: "eagle-admin-panel"
+    
+  # Third-party Integration Consumer
+  - username: eagle-integration
+    tags: ["integration", "external", "api-key-auth"]
+    custom_id: "eagle-external-integration"
+
+# JWT Credentials for Keycloak Integration
+jwt_secrets:
+  # Frontend Web Application JWT
+  - consumer: eagle-frontend
+    key: "http://keycloak:8080/realms/eagle-dev"
+    algorithm: "RS256"
+    rsa_public_key: |
+      -----BEGIN PUBLIC KEY-----
+      # This will be replaced with actual Keycloak public key via keycloak-integration.sh
+      # Placeholder for development - will be updated automatically
+      -----END PUBLIC KEY-----
+      
+  # Mobile Application JWT
+  - consumer: eagle-mobile
+    key: "http://keycloak:8080/realms/eagle-dev"
+    algorithm: "RS256"
+    rsa_public_key: |
+      -----BEGIN PUBLIC KEY-----
+      # This will be replaced with actual Keycloak public key via keycloak-integration.sh
+      # Placeholder for development - will be updated automatically
+      -----END PUBLIC KEY-----
+      
+  # Admin Panel JWT
+  - consumer: eagle-admin
+    key: "http://keycloak:8080/realms/eagle-dev"
+    algorithm: "RS256"
+    rsa_public_key: |
+      -----BEGIN PUBLIC KEY-----
+      # This will be replaced with actual Keycloak public key via keycloak-integration.sh
+      # Placeholder for development - will be updated automatically
+      -----END PUBLIC KEY-----
+
+# Plugins Configuration - Comprehensive Security and Performance
+plugins:
+  # === GLOBAL PLUGINS ===
+  
+  # Secure CORS Configuration - Production Hardened
+  - name: cors
+    config:
+      origins: 
+        # Development origins (should be removed in production)
+        - "http://localhost:3000"           # React development
+        - "http://localhost:5173"           # Vite development
+        - "http://localhost:4200"           # Angular development
+        - "http://localhost:8080"           # Kong proxy for testing
+        
+        # Production origins - strict domain matching
+        - "https://eagle.fusionx.pro"       # Production frontend
+        - "https://app.eagle.fusionx.pro"   # Production app
+        - "https://admin.eagle.fusionx.pro" # Admin panel
+        - "https://*.fusionx.pro"           # Wildcard for subdomains
+        
+      methods: 
+        - "GET"
+        - "POST"
+        - "PUT"
+        - "PATCH"
+        - "DELETE"
+        - "OPTIONS"
+        - "HEAD"
+        
+      headers:
+        # Standard headers
+        - "Accept"
+        - "Accept-Language"
+        - "Accept-Encoding"
+        - "Authorization"
+        - "Content-Type"
+        - "Content-Length"
+        
+        # Custom security headers
+        - "X-Request-ID"
+        - "X-Correlation-ID"
+        - "X-Client-Version"
+        - "X-Device-ID"
+        - "X-CSRF-Token"
+        
+        # Cache control headers
+        - "Cache-Control"
+        - "Pragma"
+        - "If-None-Match"
+        - "If-Modified-Since"
+        - "If-Unmodified-Since"
+        
+      exposed_headers:
+        # Security and tracking headers
+        - "X-Request-ID"
+        - "X-Correlation-ID"
+        - "X-Rate-Limit-Remaining"
+        - "X-Rate-Limit-Reset"
+        - "X-Rate-Limit-Limit"
+        - "X-API-Version"
+        
+        # Standard response headers
+        - "Location"
+        - "ETag"
+        - "Last-Modified"
+        - "Content-Range"
+        - "Accept-Ranges"
+        - "Content-Disposition"
+        
+      credentials: true
+      max_age: 86400  # 24 hours for preflight cache
+      preflight_continue: false
+      
+  # Global Request ID Generation
+  - name: correlation-id
+    config:
+      header_name: "X-Request-ID"
+      generator: "uuid"
+      echo_downstream: true
+      
+  # Development Debug Headers
+  - name: response-transformer
+    config:
+      add:
+        headers:
+          - "X-Kong-Upstream-Latency:{{upstream_response_time}}"
+          - "X-Kong-Proxy-Latency:{{kong_response_time}}"
+          - "X-Kong-Request-ID:{{request_id}}"
+          - "X-Development-Mode:true"
+          - "X-Kong-Service:{{service_name}}"
+          - "X-Kong-Route:{{route_name}}"
+      
+  # Comprehensive Security Headers - OWASP Hardening
+  - name: response-transformer
+    config:
+      add:
+        headers:
+          # HSTS - Force HTTPS for 1 year, include subdomains and preload
+          - "Strict-Transport-Security:max-age=31536000; includeSubDomains; preload"
+          
+          # X-Frame-Options - Prevent clickjacking
+          - "X-Frame-Options:DENY"
+          
+          # X-Content-Type-Options - Prevent MIME sniffing
+          - "X-Content-Type-Options:nosniff"
+          
+          # X-XSS-Protection - Enable XSS filtering (legacy browsers)
+          - "X-XSS-Protection:1; mode=block"
+          
+          # Referrer Policy - Control referrer information
+          - "Referrer-Policy:strict-origin-when-cross-origin"
+          
+          # Permissions Policy - Restrict browser features
+          - "Permissions-Policy:camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=(), ambient-light-sensor=(), autoplay=(), encrypted-media=(), fullscreen=(self), picture-in-picture=()"
+          
+          # Content Security Policy - Comprehensive XSS protection
+          - "Content-Security-Policy:default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.fusionx.pro; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests; block-all-mixed-content"
+          
+          # Cross-Origin Policies
+          - "Cross-Origin-Embedder-Policy:require-corp"
+          - "Cross-Origin-Opener-Policy:same-origin"
+          - "Cross-Origin-Resource-Policy:same-origin"
+          
+          # API Security Headers
+          - "X-API-Security-Version:v2.2024"
+          - "X-Rate-Limit-Policy:standard"
+          - "Cache-Control:no-cache, no-store, must-revalidate, private"
+          - "Pragma:no-cache"
+          - "Expires:0"
+          
+      remove:
+        headers:
+          # Remove server identification headers
+          - "Server"
+          - "X-Powered-By"
+          - "X-Runtime"
+          - "X-AspNet-Version"
+          - "X-AspNetMvc-Version"
+          - "X-Kong-Upstream-Status"
+          
+  # Global Request Size Limiting
+  - name: request-size-limiting
+    config:
+      allowed_payload_size: 10
+      size_unit: megabytes
+      require_content_length: false
+      
+  # Global Bot Detection
+  - name: bot-detection
+    config:
+      allow: []
+      deny: 
+        - "curl"
+        - "wget"
+        - "python-requests"
+        - "postman"
+        - "insomnia"
+        - "scrapy"
+        - "selenium"
+        
+  # Global Prometheus Metrics
+  - name: prometheus
+    config:
+      per_consumer: true
+      status_code_metrics: true
+      latency_metrics: true
+      bandwidth_metrics: true
+      upstream_health_metrics: true
+      
+  # Global File Logging - Enhanced for Development
+  - name: file-log
+    config:
+      path: "/tmp/kong-access.log"
+      reopen: true
+      custom_fields_by_lua:
+        development_info: |
+          local json = require "cjson"
+          return json.encode({
+            timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+            environment = "development",
+            client_ip = kong.client.get_ip(),
+            forwarded_for = kong.request.get_header("X-Forwarded-For"),
+            user_agent = kong.request.get_header("User-Agent"),
+            method = kong.request.get_method(),
+            path = kong.request.get_path(),
+            query = kong.request.get_raw_query(),
+            status = kong.response.get_status(),
+            latency_ms = kong.ctx.shared.response_latency,
+            request_size = kong.request.get_size(),
+            response_size = kong.response.get_size(),
+            consumer = kong.ctx.shared.authenticated_consumer and kong.ctx.shared.authenticated_consumer.username or "anonymous",
+            route = kong.ctx.shared.route and kong.ctx.shared.route.name or "unknown",
+            service = kong.ctx.shared.service and kong.ctx.shared.service.name or "unknown",
+            request_id = kong.ctx.shared.request_id or kong.request.get_header("X-Request-ID")
+          })
+      
+  # === JWT AUTHENTICATION FOR PUBLIC ROUTES ===
+  
+  # Alert Creation JWT Auth
+  - name: jwt
+    route: alert-creation
+    config:
+      uri_param_names: ["jwt"]
+      cookie_names: ["jwt", "eagle-session"]
+      header_names: ["authorization", "x-auth-token"]
+      claims_to_verify: ["exp", "iss", "aud"]
+      key_claim_name: "iss"
+      secret_is_base64: false
+      run_on_preflight: true
+      anonymous: null
+      
+  # Process Status JWT Auth
+  - name: jwt
+    route: process-status
+    config:
+      uri_param_names: ["jwt"]
+      cookie_names: ["jwt", "eagle-session"]
+      header_names: ["authorization", "x-auth-token"]
+      claims_to_verify: ["exp", "iss", "aud"]
+      key_claim_name: "iss"
+      secret_is_base64: false
+      run_on_preflight: true
+      
+  # Process Statistics JWT Auth
+  - name: jwt
+    route: process-statistics
+    config:
+      uri_param_names: ["jwt"]
+      cookie_names: ["jwt", "eagle-session"]
+      header_names: ["authorization", "x-auth-token"]
+      claims_to_verify: ["exp", "iss", "aud"]
+      key_claim_name: "iss"
+      secret_is_base64: false
+      run_on_preflight: true
+      
+  # Alert Listing JWT Auth
+  - name: jwt
+    route: alert-listing
+    config:
+      uri_param_names: ["jwt"]
+      cookie_names: ["jwt", "eagle-session"]
+      header_names: ["authorization", "x-auth-token"]
+      claims_to_verify: ["exp", "iss", "aud"]
+      key_claim_name: "iss"
+      secret_is_base64: false
+      run_on_preflight: true
+      
+  # Alert Details JWT Auth
+  - name: jwt
+    route: alert-details
+    config:
+      uri_param_names: ["jwt"]
+      cookie_names: ["jwt", "eagle-session"]
+      header_names: ["authorization", "x-auth-token"]
+      claims_to_verify: ["exp", "iss", "aud"]
+      key_claim_name: "iss"
+      secret_is_base64: false
+      run_on_preflight: true
+      
+  # Alert Export JWT Auth
+  - name: jwt
+    route: alert-export
+    config:
+      uri_param_names: ["jwt"]
+      cookie_names: ["jwt", "eagle-session"]
+      header_names: ["authorization", "x-auth-token"]
+      claims_to_verify: ["exp", "iss", "aud"]
+      key_claim_name: "iss"
+      secret_is_base64: false
+      run_on_preflight: true
+      
+  # Customer Search JWT Auth
+  - name: jwt
+    route: customer-search
+    config:
+      uri_param_names: ["jwt"]
+      cookie_names: ["jwt", "eagle-session"]
+      header_names: ["authorization", "x-auth-token"]
+      claims_to_verify: ["exp", "iss", "aud"]
+      key_claim_name: "iss"
+      secret_is_base64: false
+      run_on_preflight: true
+      
+  # Customer Details JWT Auth
+  - name: jwt
+    route: customer-details
+    config:
+      uri_param_names: ["jwt"]
+      cookie_names: ["jwt", "eagle-session"]
+      header_names: ["authorization", "x-auth-token"]
+      claims_to_verify: ["exp", "iss", "aud"]
+      key_claim_name: "iss"
+      secret_is_base64: false
+      run_on_preflight: true
+      
+  # Transaction Analysis JWT Auth
+  - name: jwt
+    route: transaction-analysis
+    config:
+      uri_param_names: ["jwt"]
+      cookie_names: ["jwt", "eagle-session"]
+      header_names: ["authorization", "x-auth-token"]
+      claims_to_verify: ["exp", "iss", "aud"]
+      key_claim_name: "iss"
+      secret_is_base64: false
+      run_on_preflight: true
+      
+  # Transaction KPIs JWT Auth
+  - name: jwt
+    route: transaction-kpis
+    config:
+      uri_param_names: ["jwt"]
+      cookie_names: ["jwt", "eagle-session"]
+      header_names: ["authorization", "x-auth-token"]
+      claims_to_verify: ["exp", "iss", "aud"]
+      key_claim_name: "iss"
+      secret_is_base64: false
+      run_on_preflight: true
+      
+  # External Data Query JWT Auth
+  - name: jwt
+    route: external-data-query
+    config:
+      uri_param_names: ["jwt"]
+      cookie_names: ["jwt", "eagle-session"]
+      header_names: ["authorization", "x-auth-token"]
+      claims_to_verify: ["exp", "iss", "aud"]
+      key_claim_name: "iss"
+      secret_is_base64: false
+      run_on_preflight: true
+      
+  # External Data Status JWT Auth
+  - name: jwt
+    route: external-data-status
+    config:
+      uri_param_names: ["jwt"]
+      cookie_names: ["jwt", "eagle-session"]
+      header_names: ["authorization", "x-auth-token"]
+      claims_to_verify: ["exp", "iss", "aud"]
+      key_claim_name: "iss"
+      secret_is_base64: false
+      run_on_preflight: true
+      
+  # === API KEY AUTHENTICATION FOR INTERNAL ROUTES ===
+  
+  # MS-Alert Internal API Key Auth
+  - name: key-auth
+    route: ms-alert-internal
+    config:
+      key_names: ["X-API-Key", "X-Internal-Key"]
+      key_in_body: false
+      key_in_header: true
+      key_in_query: false
+      hide_credentials: true
+      anonymous: null
+      
+  # MS-Customer Internal API Key Auth
+  - name: key-auth
+    route: ms-customer-internal
+    config:
+      key_names: ["X-API-Key", "X-Internal-Key"]
+      key_in_body: false
+      key_in_header: true
+      key_in_query: false
+      hide_credentials: true
+      
+  # MS-Transaction Internal API Key Auth
+  - name: key-auth
+    route: ms-transaction-internal
+    config:
+      key_names: ["X-API-Key", "X-Internal-Key"]
+      key_in_body: false
+      key_in_header: true
+      key_in_query: false
+      hide_credentials: true
+      
+  # MS-API Internal API Key Auth
+  - name: key-auth
+    route: ms-api-internal
+    config:
+      key_names: ["X-API-Key", "X-Internal-Key"]
+      key_in_body: false
+      key_in_header: true
+      key_in_query: false
+      hide_credentials: true
+      
+  # MS-Enrichment Internal API Key Auth
+  - name: key-auth
+    route: ms-enrichment-internal
+    config:
+      key_names: ["X-API-Key", "X-Internal-Key"]
+      key_in_body: false
+      key_in_header: true
+      key_in_query: false
+      hide_credentials: true
+      
+  # === RATE LIMITING CONFIGURATION ===
+  
+  # Alert Creation Rate Limiting (Development-friendly)
+  - name: rate-limiting
+    route: alert-creation
+    config:
+      minute: 100
+      hour: 1000
+      day: 10000
+      policy: redis
+      redis_host: redis-master
+      redis_port: 6379
+      redis_database: 1
+      redis_timeout: 2000
+      fault_tolerant: true
+      hide_client_headers: false
+      
+  # Process Status Rate Limiting
+  - name: rate-limiting
+    route: process-status
+    config:
+      minute: 200
+      hour: 2000
+      day: 20000
+      policy: redis
+      redis_host: redis-master
+      redis_port: 6379
+      redis_database: 1
+      redis_timeout: 2000
+      fault_tolerant: true
+      
+  # Process Statistics Rate Limiting
+  - name: rate-limiting
+    route: process-statistics
+    config:
+      minute: 100
+      hour: 1000
+      day: 10000
+      policy: redis
+      redis_host: redis-master
+      redis_port: 6379
+      redis_database: 1
+      redis_timeout: 2000
+      fault_tolerant: true
+      
+  # Alert Listing Rate Limiting
+  - name: rate-limiting
+    route: alert-listing
+    config:
+      minute: 300
+      hour: 3000
+      day: 30000
+      policy: redis
+      redis_host: redis-master
+      redis_port: 6379
+      redis_database: 1
+      redis_timeout: 2000
+      fault_tolerant: true
+      
+  # Alert Details Rate Limiting
+  - name: rate-limiting
+    route: alert-details
+    config:
+      minute: 500
+      hour: 5000
+      day: 50000
+      policy: redis
+      redis_host: redis-master
+      redis_port: 6379
+      redis_database: 1
+      redis_timeout: 2000
+      fault_tolerant: true
+      
+  # Customer Search Rate Limiting
+  - name: rate-limiting
+    route: customer-search
+    config:
+      minute: 200
+      hour: 2000
+      day: 20000
+      policy: redis
+      redis_host: redis-master
+      redis_port: 6379
+      redis_database: 1
+      redis_timeout: 2000
+      fault_tolerant: true
+      
+  # External Data Query Rate Limiting (Development-friendly)
+  - name: rate-limiting
+    route: external-data-query
+    config:
+      minute: 60
+      hour: 600
+      day: 6000
+      policy: redis
+      redis_host: redis-master
+      redis_port: 6379
+      redis_database: 1
+      redis_timeout: 2000
+      fault_tolerant: true
+      
+  # === REQUEST VALIDATION ===
+  
+  # Alert Creation Request Validation
+  - name: request-validator
+    route: alert-creation
+    config:
+      version: draft4
+      body_schema: |
+        {
+          "type": "object",
+          "properties": {
+            "customerDocument": {
+              "type": "string",
+              "pattern": "^[0-9]{11}$|^[0-9]{14}$"
+            },
+            "scopeStartDate": {
+              "type": "string",
+              "format": "date"
+            },
+            "scopeEndDate": {
+              "type": "string",
+              "format": "date"
+            },
+            "requesterId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
+          "required": ["customerDocument", "scopeStartDate", "scopeEndDate"],
+          "additionalProperties": false
+        }
+        
+  # === AUDIT LOGGING ===
+  
+  # HTTP Logging for Alert Creation (Audit Trail)
+  - name: http-log
+    route: alert-creation
+    config:
+      http_endpoint: "http://ms-orchestrator:8088/api/v1/audit/logs"
+      method: "POST"
+      content_type: "application/json"
+      timeout: 10000
+      keepalive: 60000
+      flush_timeout: 2
+      retry_count: 3
+      queue_size: 1000
+      headers:
+        X-Source: "kong-gateway"
+        X-Event-Type: "alert-creation"
+        
+  # HTTP Logging for Alert Export (Audit Trail)
+  - name: http-log
+    route: alert-export
+    config:
+      http_endpoint: "http://ms-orchestrator:8088/api/v1/audit/logs"
+      method: "POST"
+      content_type: "application/json"
+      timeout: 10000
+      keepalive: 60000
+      headers:
+        X-Source: "kong-gateway"
+        X-Event-Type: "alert-export"
+        
+  # === SESSION MANAGEMENT ===
+  
+  # Session Management for Web Clients
+  - name: session
+    config:
+      storage: "redis"
+      redis:
+        host: "redis-master"
+        port: 6379
+        database: 2
+        ssl: false
+        timeout: 2000
+      cookie:
+        name: "eagle-session"
+        path: "/"
+        domain: ".eagle.fusionx.com.br"
+        same_site: "Strict"
+        http_only: true
+        secure: true
+        max_age: 3600
+        renew: 600
+      logout_methods: ["POST", "DELETE"]
+      logout_query_arg: "logout"
+      
+  # === IP RESTRICTION (Production Ready) ===
+  
+  # IP Restriction for Internal Routes
+  - name: ip-restriction
+    route: ms-alert-internal
+    config:
+      allow: 
+        - "10.0.0.0/8"      # Internal Docker network
+        - "172.16.0.0/12"   # Docker Compose network
+        - "192.168.0.0/16"  # Local development
+        - "127.0.0.1/32"    # Localhost
+      deny: []
+      message: "Access denied from your IP address"
+      
+  - name: ip-restriction
+    route: ms-customer-internal
+    config:
+      allow: 
+        - "10.0.0.0/8"
+        - "172.16.0.0/12"
+        - "192.168.0.0/16"
+        - "127.0.0.1/32"
+      deny: []
+      
+  - name: ip-restriction
+    route: ms-transaction-internal
+    config:
+      allow: 
+        - "10.0.0.0/8"
+        - "172.16.0.0/12"
+        - "192.168.0.0/16"
+        - "127.0.0.1/32"
+      deny: []
+      
+  - name: ip-restriction
+    route: ms-api-internal
+    config:
+      allow: 
+        - "10.0.0.0/8"
+        - "172.16.0.0/12"
+        - "192.168.0.0/16"
+        - "127.0.0.1/32"
+      deny: []
+      
+  - name: ip-restriction
+    route: ms-enrichment-internal
+    config:
+      allow: 
+        - "10.0.0.0/8"
+        - "172.16.0.0/12"
+        - "192.168.0.0/16"
+        - "127.0.0.1/32"
+      deny: []
+
+# Key Auth Credentials for Internal Services
+keyauth_credentials:
+  # Internal System API Key
+  - consumer: eagle-internal
+    key: "eagle-internal-api-key-2024"
+    tags: ["internal", "system", "microservice"]
+    
+  # Integration API Key for External Systems
+  - consumer: eagle-integration
+    key: "eagle-integration-api-key-2024"
+    tags: ["integration", "external", "third-party"]
+
+# ACL (Access Control List) Configuration
+acls:
+  # Frontend Web Access
+  - consumer: eagle-frontend
+    group: "frontend-web"
+    tags: ["web", "client"]
+    
+  # Mobile App Access
+  - consumer: eagle-mobile
+    group: "mobile-app"
+    tags: ["mobile", "client"]
+    
+  # Admin Panel Access
+  - consumer: eagle-admin
+    group: "admin-panel"
+    tags: ["admin", "management"]
+    
+  # Internal System Access
+  - consumer: eagle-internal
+    group: "internal-system"
+    tags: ["internal", "microservice"]
+    
+  # External Integration Access
+  - consumer: eagle-integration
+    group: "external-integration"
+    tags: ["integration", "external"]
+
+# Additional Security Plugins
+plugins:
+  # ACL Plugin for Route-based Access Control
+  - name: acl
+    route: alert-creation
+    config:
+      allow: ["frontend-web", "mobile-app", "admin-panel"]
+      hide_groups_header: true
+      
+  - name: acl
+    route: alert-listing
+    config:
+      allow: ["frontend-web", "mobile-app", "admin-panel"]
+      hide_groups_header: true
+      
+  - name: acl
+    route: ms-alert-internal
+    config:
+      allow: ["internal-system"]
+      hide_groups_header: true
+      
+  - name: acl
+    route: ms-customer-internal
+    config:
+      allow: ["internal-system"]
+      hide_groups_header: true
+      
+  - name: acl
+    route: ms-transaction-internal
+    config:
+      allow: ["internal-system"]
+      hide_groups_header: true
+      
+  - name: acl
+    route: ms-api-internal
+    config:
+      allow: ["internal-system"]
+      hide_groups_header: true
+      
+  - name: acl
+    route: ms-enrichment-internal
+    config:
+      allow: ["internal-system"]
+      hide_groups_header: true
+
+# Request Termination Plugin (Emergency Use)
+plugins:
+  - name: request-termination
+    enabled: false  # Can be enabled dynamically for emergency blocking
+    config:
+      status_code: 503
+      content_type: "application/json"
+      body: |
+        {
+          "error": "Service temporarily unavailable",
+          "code": "SERVICE_UNAVAILABLE",
+          "message": "The Eagle system is currently under maintenance. Please try again later.",
+          "timestamp": "{{.timestamp}}",
+          "request_id": "{{.request_id}}",
+          "support": "support@fusionx.com.br"
+        }
+      trigger: null

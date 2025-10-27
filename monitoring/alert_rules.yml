@@ -1,0 +1,301 @@
+groups:
+  - name: eagle-alert-system.rules
+    rules:
+      # High-level SLA alerts
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_total{status=~"5.."}[5m])) by (service)
+            /
+            sum(rate(http_requests_total[5m])) by (service)
+          ) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          team: eagle
+        annotations:
+          summary: "High error rate detected for {{ $labels.service }}"
+          description: "Error rate is {{ $value | humanizePercentage }} for service {{ $labels.service }}"
+          runbook_url: "https://wiki.company.com/runbooks/high-error-rate"
+
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95, 
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (le, service)
+          ) > 1.0
+        for: 5m
+        labels:
+          severity: warning
+          team: eagle
+        annotations:
+          summary: "High latency detected for {{ $labels.service }}"
+          description: "95th percentile latency is {{ $value }}s for service {{ $labels.service }}"
+          runbook_url: "https://wiki.company.com/runbooks/high-latency"
+
+      # Alert creation specific alerts
+      - alert: AlertCreationFailureRate
+        expr: |
+          (
+            sum(rate(alerts_created_total{status="failed"}[5m]))
+            /
+            sum(rate(alerts_created_total[5m]))
+          ) > 0.10
+        for: 3m
+        labels:
+          severity: critical
+          team: eagle
+        annotations:
+          summary: "High alert creation failure rate"
+          description: "Alert creation failure rate is {{ $value | humanizePercentage }}"
+          runbook_url: "https://wiki.company.com/runbooks/alert-creation-failures"
+
+      - alert: AlertEnrichmentTimeout
+        expr: |
+          sum(rate(alerts_enrichment_duration_seconds{quantile="0.95"}[5m])) > 300
+        for: 5m
+        labels:
+          severity: warning
+          team: eagle
+        annotations:
+          summary: "Alert enrichment taking too long"
+          description: "95th percentile enrichment time is {{ $value }}s"
+          runbook_url: "https://wiki.company.com/runbooks/enrichment-timeout"
+
+      # SQS Queue alerts
+      - alert: SQSQueueBacklog
+        expr: |
+          aws_sqs_approximate_number_of_visible_messages > 1000
+        for: 5m
+        labels:
+          severity: warning
+          team: eagle
+        annotations:
+          summary: "SQS queue {{ $labels.queue_name }} has high backlog"
+          description: "Queue {{ $labels.queue_name }} has {{ $value }} messages"
+          runbook_url: "https://wiki.company.com/runbooks/sqs-backlog"
+
+      - alert: SQSDeadLetterQueue
+        expr: |
+          aws_sqs_approximate_number_of_visible_messages{queue_name=~".*-dlq"} > 0
+        for: 1m
+        labels:
+          severity: critical
+          team: eagle
+        annotations:
+          summary: "Messages in dead letter queue {{ $labels.queue_name }}"
+          description: "Dead letter queue {{ $labels.queue_name }} has {{ $value }} messages"
+          runbook_url: "https://wiki.company.com/runbooks/dlq-messages"
+
+      # Database alerts
+      - alert: DatabaseConnectionPoolExhaustion
+        expr: |
+          hikaricp_connections_active / hikaricp_connections_max > 0.9
+        for: 2m
+        labels:
+          severity: critical
+          team: eagle
+        annotations:
+          summary: "Database connection pool nearly exhausted for {{ $labels.service }}"
+          description: "Connection pool usage is {{ $value | humanizePercentage }}"
+          runbook_url: "https://wiki.company.com/runbooks/db-connection-pool"
+
+      - alert: DatabaseSlowQueries
+        expr: |
+          histogram_quantile(0.95, 
+            sum(rate(spring_data_repository_invocations_seconds_bucket[5m])) by (le, repository)
+          ) > 5.0
+        for: 5m
+        labels:
+          severity: warning
+          team: eagle
+        annotations:
+          summary: "Slow database queries detected"
+          description: "95th percentile query time is {{ $value }}s for {{ $labels.repository }}"
+          runbook_url: "https://wiki.company.com/runbooks/slow-queries"
+
+      # Redis cache alerts
+      - alert: RedisCacheHitRateLow
+        expr: |
+          (
+            sum(rate(spring_cache_gets{result="hit"}[5m]))
+            /
+            sum(rate(spring_cache_gets[5m]))
+          ) < 0.8
+        for: 10m
+        labels:
+          severity: warning
+          team: eagle
+        annotations:
+          summary: "Redis cache hit rate is low"
+          description: "Cache hit rate is {{ $value | humanizePercentage }}"
+          runbook_url: "https://wiki.company.com/runbooks/low-cache-hit-rate"
+
+      - alert: RedisConnectionFailure
+        expr: |
+          redis_connected_clients == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: eagle
+        annotations:
+          summary: "Redis connection failure"
+          description: "No Redis connections available"
+          runbook_url: "https://wiki.company.com/runbooks/redis-connection-failure"
+
+      # Resource utilization alerts
+      - alert: HighCPUUsage
+        expr: |
+          (
+            sum(rate(container_cpu_usage_seconds_total{container!="POD",container!=""}[5m])) by (pod)
+            /
+            sum(container_spec_cpu_quota{container!="POD",container!=""}/container_spec_cpu_period{container!="POD",container!=""}) by (pod)
+          ) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+          team: eagle
+        annotations:
+          summary: "High CPU usage for pod {{ $labels.pod }}"
+          description: "CPU usage is {{ $value | humanizePercentage }}"
+          runbook_url: "https://wiki.company.com/runbooks/high-cpu-usage"
+
+      - alert: HighMemoryUsage
+        expr: |
+          (
+            sum(container_memory_working_set_bytes{container!="POD",container!=""}) by (pod)
+            /
+            sum(container_spec_memory_limit_bytes{container!="POD",container!=""}) by (pod)
+          ) > 0.9
+        for: 5m
+        labels:
+          severity: critical
+          team: eagle
+        annotations:
+          summary: "High memory usage for pod {{ $labels.pod }}"
+          description: "Memory usage is {{ $value | humanizePercentage }}"
+          runbook_url: "https://wiki.company.com/runbooks/high-memory-usage"
+
+      # Kubernetes alerts
+      - alert: PodCrashLooping
+        expr: |
+          rate(kube_pod_container_status_restarts_total[15m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+          team: eagle
+        annotations:
+          summary: "Pod {{ $labels.pod }} is crash looping"
+          description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is restarting frequently"
+          runbook_url: "https://wiki.company.com/runbooks/pod-crash-looping"
+
+      - alert: PodNotReady
+        expr: |
+          kube_pod_status_ready{condition="false"} == 1
+        for: 10m
+        labels:
+          severity: warning
+          team: eagle
+        annotations:
+          summary: "Pod {{ $labels.pod }} not ready"
+          description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has been not ready for more than 10 minutes"
+          runbook_url: "https://wiki.company.com/runbooks/pod-not-ready"
+
+      # External API alerts
+      - alert: ExternalAPIFailure
+        expr: |
+          sum(rate(external_api_requests_total{status=~"5.."}[5m])) by (api_name) > 0.1
+        for: 3m
+        labels:
+          severity: warning
+          team: eagle
+        annotations:
+          summary: "External API {{ $labels.api_name }} experiencing failures"
+          description: "External API {{ $labels.api_name }} failure rate is {{ $value }}/sec"
+          runbook_url: "https://wiki.company.com/runbooks/external-api-failure"
+
+      - alert: ExternalAPITimeout
+        expr: |
+          histogram_quantile(0.95, 
+            sum(rate(external_api_request_duration_seconds_bucket[5m])) by (le, api_name)
+          ) > 30
+        for: 5m
+        labels:
+          severity: warning
+          team: eagle
+        annotations:
+          summary: "External API {{ $labels.api_name }} timeouts"
+          description: "95th percentile response time is {{ $value }}s for {{ $labels.api_name }}"
+          runbook_url: "https://wiki.company.com/runbooks/external-api-timeout"
+
+      # Security alerts
+      - alert: UnauthorizedAccess
+        expr: |
+          sum(rate(http_requests_total{status="401"}[5m])) by (service) > 10
+        for: 2m
+        labels:
+          severity: warning
+          team: eagle
+          security: "true"
+        annotations:
+          summary: "High number of unauthorized requests to {{ $labels.service }}"
+          description: "{{ $value }} unauthorized requests per second to {{ $labels.service }}"
+          runbook_url: "https://wiki.company.com/runbooks/unauthorized-access"
+
+      - alert: SuspiciousActivity
+        expr: |
+          sum(rate(http_requests_total{status="403"}[5m])) by (service) > 5
+        for: 2m
+        labels:
+          severity: critical
+          team: eagle
+          security: "true"
+        annotations:
+          summary: "Suspicious activity detected on {{ $labels.service }}"
+          description: "{{ $value }} forbidden requests per second to {{ $labels.service }}"
+          runbook_url: "https://wiki.company.com/runbooks/suspicious-activity"
+
+  - name: eagle-business-metrics.rules
+    rules:
+      # Business KPI alerts
+      - alert: LowAlertCreationRate
+        expr: |
+          sum(rate(alerts_created_total{status="success"}[1h])) < 10
+        for: 30m
+        labels:
+          severity: warning
+          team: eagle
+          type: business
+        annotations:
+          summary: "Low alert creation rate"
+          description: "Only {{ $value }} alerts created per hour in the last hour"
+          runbook_url: "https://wiki.company.com/runbooks/low-alert-creation"
+
+      - alert: HighEnrichmentFailureRate
+        expr: |
+          (
+            sum(rate(alerts_enrichment_total{status="failed"}[1h]))
+            /
+            sum(rate(alerts_enrichment_total[1h]))
+          ) > 0.05
+        for: 15m
+        labels:
+          severity: warning
+          team: eagle
+          type: business
+        annotations:
+          summary: "High enrichment failure rate"
+          description: "Enrichment failure rate is {{ $value | humanizePercentage }}"
+          runbook_url: "https://wiki.company.com/runbooks/enrichment-failures"
+
+      - alert: CustomerDataUnavailable
+        expr: |
+          sum(rate(customer_data_requests_total{status="not_found"}[5m])) > 1
+        for: 5m
+        labels:
+          severity: critical
+          team: eagle
+          type: business
+        annotations:
+          summary: "Customer data frequently unavailable"
+          description: "{{ $value }} customer not found errors per second"
+          runbook_url: "https://wiki.company.com/runbooks/customer-data-unavailable"
