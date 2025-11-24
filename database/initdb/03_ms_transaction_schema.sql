@@ -1,6 +1,17 @@
 -- 03_ms_transaction_schema.sql
 \c ms_transaction;
 
+-- Grant schema permissions to eagle_user
+GRANT ALL ON SCHEMA public TO eagle_user;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO eagle_user;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO eagle_user;
+GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO eagle_user;
+
+-- Set default privileges for future objects
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO eagle_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO eagle_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO eagle_user;
+
 -- Create transactions table
 CREATE TABLE IF NOT EXISTS transactions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -97,3 +108,8 @@ GROUP BY customer_document, DATE_TRUNC('month', transaction_date);
 COMMENT ON TABLE transactions IS 'Stores all customer transactions for analysis and KPI calculation';
 COMMENT ON VIEW transaction_summaries IS 'Daily transaction summaries by customer';
 COMMENT ON VIEW monthly_transaction_kpis IS 'Monthly KPIs and metrics by customer';
+
+-- Ensure eagle_user has access to all created objects
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO eagle_user;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO eagle_user;
+GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO eagle_user;

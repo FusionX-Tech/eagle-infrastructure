@@ -1,0 +1,10 @@
+# ⚠️ DEPRECATED - Pact Broker foi movido para Eagle/eagle-backend/docker-compose.yml
+#
+# O Pact Broker agora faz parte da stack do backend, junto com os microsserviços
+# que ele testa.
+#
+# Para iniciar o Pact Broker:
+# cd Eagle/eagle-backend
+# docker compose --profile backend up -d pact-broker
+#
+# Este arquivo será removido em breve.

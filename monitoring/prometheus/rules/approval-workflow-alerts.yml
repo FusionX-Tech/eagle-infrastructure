@@ -1,0 +1,274 @@
+groups:
+  - name: approval-workflow.rules
+    rules:
+      # Workflows pendentes - alerta crítico quando > 100
+      - alert: TooManyPendingWorkflows
+        expr: |
+          approval_workflow_pending_gauge > 100
+        for: 1h
+        labels:
+          severity: critical
+          team: eagle
+          component: approval-workflow
+        annotations:
+          summary: "Too many pending approval workflows"
+          description: "There are {{ $value }} pending approval workflows, exceeding the threshold of 100. This may indicate a bottleneck in the approval process."
+          runbook_url: "https://wiki.company.com/runbooks/approval-workflow-backlog"
+          action: "Review approval process, check if approvers are active, consider increasing approver pool"
+
+      # Taxa de rejeição alta - alerta quando > 50% em 5 minutos
+      - alert: HighWorkflowRejectionRate
+        expr: |
+          (
+            sum(rate(approval_workflow_rejected_total[5m]))
+            /
+            sum(rate(approval_workflow_created_total[5m]))
+          ) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+          team: eagle
+          component: approval-workflow
+        annotations:
+          summary: "High workflow rejection rate"
+          description: "Workflow rejection rate is {{ $value | humanizePercentage }} over the last 5 minutes. This may indicate quality issues with rule submissions."
+          runbook_url: "https://wiki.company.com/runbooks/high-rejection-rate"
+          action: "Review rejected workflows, identify common rejection reasons, provide feedback to rule creators"
+
+      # Taxa de rejeição crítica - alerta quando > 80% em 5 minutos
+      - alert: CriticalWorkflowRejectionRate
+        expr: |
+          (
+            sum(rate(approval_workflow_rejected_total[5m]))
+            /
+            sum(rate(approval_workflow_created_total[5m]))
+          ) > 0.8
+        for: 5m
+        labels:
+          severity: critical
+          team: eagle
+          component: approval-workflow
+        annotations:
+          summary: "Critical workflow rejection rate"
+          description: "Workflow rejection rate is {{ $value | humanizePercentage }} over the last 5 minutes. Almost all workflows are being rejected."
+          runbook_url: "https://wiki.company.com/runbooks/critical-rejection-rate"
+          action: "Immediate investigation required - check for systemic issues, review approval criteria"
+
+      # Email service down - health check falhou
+      - alert: EmailServiceDown
+        expr: |
+          up{job="ms-rules",health_component="emailService"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          team: eagle
+          component: approval-workflow
+        annotations:
+          summary: "Email service is down"
+          description: "Email service health check has been failing for 5 minutes. Approval notifications cannot be sent."
+          runbook_url: "https://wiki.company.com/runbooks/email-service-down"
+          action: "Check SMTP server connectivity, verify credentials, review email service logs"
+
+      # Taxa de tokens expirados alta - alerta quando > 10 por hora
+      - alert: HighTokenExpirationRate
+        expr: |
+          rate(approval_token_expired_total[1h]) > 10
+        for: 30m
+        labels:
+          severity: warning
+          team: eagle
+          component: approval-workflow
+        annotations:
+          summary: "High token expiration rate"
+          description: "{{ $value }} tokens are expiring per hour. Approvers may not be responding to approval requests in time."
+          runbook_url: "https://wiki.company.com/runbooks/high-token-expiration"
+          action: "Review token expiration policy (currently 7 days), send reminder emails, check if approvers are receiving notifications"
+
+      # Tokens expirados sem uso - alerta quando > 20 por hora
+      - alert: UnusedTokensExpiring
+        expr: |
+          rate(approval_token_expired_total[1h]) > 20
+        for: 1h
+        labels:
+          severity: critical
+          team: eagle
+          component: approval-workflow
+        annotations:
+          summary: "Many unused tokens expiring"
+          description: "{{ $value }} tokens are expiring per hour without being used. Approvers are not engaging with approval requests."
+          runbook_url: "https://wiki.company.com/runbooks/unused-tokens-expiring"
+          action: "Investigate why approvers are not responding, check email delivery, verify approver contact information"
+
+      # Tempo médio de aprovação muito alto - alerta quando > 48 horas
+      - alert: SlowApprovalProcess
+        expr: |
+          histogram_quantile(0.95, 
+            sum(rate(approval_workflow_duration_seconds_bucket[1h])) by (le)
+          ) > 172800
+        for: 2h
+        labels:
+          severity: warning
+          team: eagle
+          component: approval-workflow
+        annotations:
+          summary: "Approval process is taking too long"
+          description: "95th percentile approval time is {{ $value | humanizeDuration }}. Workflows are taking more than 48 hours to complete."
+          runbook_url: "https://wiki.company.com/runbooks/slow-approval-process"
+          action: "Review approval workflow, consider reducing required approvals, add more approvers"
+
+      # Falhas no envio de emails - alerta quando > 5% de falha
+      - alert: EmailSendFailureRate
+        expr: |
+          (
+            sum(rate(approval_email_failed_total[5m]))
+            /
+            sum(rate(approval_email_sent_total[5m]))
+          ) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          team: eagle
+          component: approval-workflow
+        annotations:
+          summary: "High email send failure rate"
+          description: "Email send failure rate is {{ $value | humanizePercentage }}. Approval notifications may not be reaching approvers."
+          runbook_url: "https://wiki.company.com/runbooks/email-send-failures"
+          action: "Check SMTP server status, review email service logs, verify email addresses"
+
+      # Nenhum workflow criado em 1 hora - possível problema
+      - alert: NoWorkflowsCreated
+        expr: |
+          sum(rate(approval_workflow_created_total[1h])) == 0
+        for: 2h
+        labels:
+          severity: warning
+          team: eagle
+          component: approval-workflow
+        annotations:
+          summary: "No approval workflows created recently"
+          description: "No approval workflows have been created in the last 2 hours. This may indicate an issue with rule creation or workflow integration."
+          runbook_url: "https://wiki.company.com/runbooks/no-workflows-created"
+          action: "Check rule creation service, verify event listeners are working, review application logs"
+
+      # Taxa de cancelamento alta - alerta quando > 30%
+      - alert: HighWorkflowCancellationRate
+        expr: |
+          (
+            sum(rate(approval_workflow_cancelled_total[1h]))
+            /
+            sum(rate(approval_workflow_created_total[1h]))
+          ) > 0.3
+        for: 30m
+        labels:
+          severity: warning
+          team: eagle
+          component: approval-workflow
+        annotations:
+          summary: "High workflow cancellation rate"
+          description: "Workflow cancellation rate is {{ $value | humanizePercentage }}. Many workflows are being cancelled before completion."
+          runbook_url: "https://wiki.company.com/runbooks/high-cancellation-rate"
+          action: "Review reasons for cancellations, check if rule creators need better guidance, improve rule validation"
+
+      # Aprovações duplicadas detectadas - possível bug
+      - alert: DuplicateApprovalAttempts
+        expr: |
+          sum(rate(approval_duplicate_attempt_total[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          team: eagle
+          component: approval-workflow
+        annotations:
+          summary: "Duplicate approval attempts detected"
+          description: "{{ $value }} duplicate approval attempts per second. This may indicate a bug or user confusion."
+          runbook_url: "https://wiki.company.com/runbooks/duplicate-approvals"
+          action: "Review application logs, check for race conditions, improve user feedback"
+
+      # Self-approval attempts - possível tentativa de fraude
+      - alert: SelfApprovalAttempts
+        expr: |
+          sum(rate(approval_self_approval_attempt_total[5m])) > 0
+        for: 1m
+        labels:
+          severity: critical
+          team: eagle
+          component: approval-workflow
+          security: "true"
+        annotations:
+          summary: "Self-approval attempts detected"
+          description: "{{ $value }} self-approval attempts per second. Users are trying to approve their own workflows."
+          runbook_url: "https://wiki.company.com/runbooks/self-approval-attempts"
+          action: "Security investigation required - review audit logs, identify users, verify authorization controls"
+
+      # Aprovadores inativos tentando aprovar
+      - alert: InactiveApproverAttempts
+        expr: |
+          sum(rate(approval_inactive_approver_attempt_total[5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+          team: eagle
+          component: approval-workflow
+        annotations:
+          summary: "Inactive approvers attempting to approve"
+          description: "{{ $value }} approval attempts from inactive approvers per second."
+          runbook_url: "https://wiki.company.com/runbooks/inactive-approver-attempts"
+          action: "Review approver status, update approver list, notify affected users"
+
+      # Tokens inválidos sendo usados - possível ataque
+      - alert: InvalidTokenUsage
+        expr: |
+          sum(rate(approval_token_invalid_total[5m])) > 5
+        for: 5m
+        labels:
+          severity: critical
+          team: eagle
+          component: approval-workflow
+          security: "true"
+        annotations:
+          summary: "High rate of invalid token usage"
+          description: "{{ $value }} invalid token attempts per second. This may indicate an attack or token tampering."
+          runbook_url: "https://wiki.company.com/runbooks/invalid-token-usage"
+          action: "Security investigation required - review access logs, check for token tampering, verify HMAC validation"
+
+  - name: approval-workflow-business.rules
+    rules:
+      # Métricas de negócio - SLA de aprovação
+      - alert: ApprovalSLABreach
+        expr: |
+          (
+            sum(approval_workflow_duration_seconds_sum{status="approved"})
+            /
+            sum(approval_workflow_duration_seconds_count{status="approved"})
+          ) > 86400
+        for: 1h
+        labels:
+          severity: warning
+          team: eagle
+          component: approval-workflow
+          type: business
+        annotations:
+          summary: "Approval SLA breach"
+          description: "Average approval time is {{ $value | humanizeDuration }}, exceeding the 24-hour SLA."
+          runbook_url: "https://wiki.company.com/runbooks/approval-sla-breach"
+          action: "Review approval process efficiency, consider workflow optimization"
+
+      # Taxa de aprovação muito baixa - possível problema de qualidade
+      - alert: LowApprovalRate
+        expr: |
+          (
+            sum(rate(approval_workflow_approved_total[24h]))
+            /
+            sum(rate(approval_workflow_created_total[24h]))
+          ) < 0.5
+        for: 4h
+        labels:
+          severity: warning
+          team: eagle
+          component: approval-workflow
+          type: business
+        annotations:
+          summary: "Low approval rate"
+          description: "Only {{ $value | humanizePercentage }} of workflows are being approved. This may indicate quality issues."
+          runbook_url: "https://wiki.company.com/runbooks/low-approval-rate"
+          action: "Review rule quality, provide training to rule creators, improve validation"

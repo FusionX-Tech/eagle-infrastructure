@@ -1,0 +1,795 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "eagle-flow-integration",
+    "title": "Eagle Flow - Integration Health",
+    "tags": ["eagle", "eagle-flow", "integration", "resilience"],
+    "style": "dark",
+    "timezone": "browser",
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Integration Success Rate by Service",
+        "type": "gauge",
+        "gridPos": {"h": 8, "w": 8, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "sum(rate(eagle_flow_integration_calls_total{status=\"success\"}[5m])) by (service) / sum(rate(eagle_flow_integration_calls_total[5m])) by (service) * 100",
+            "legendFormat": "{{service}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 90},
+                {"color": "green", "value": 95}
+              ]
+            },
+            "unit": "percent",
+            "min": 0,
+            "max": 100
+          }
+        },
+        "options": {
+          "showThresholdLabels": true,
+          "showThresholdMarkers": true
+        }
+      },
+      {
+        "id": 2,
+        "title": "ms-alert Success Rate",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 8, "x": 8, "y": 0},
+        "targets": [
+          {
+            "expr": "sum(rate(eagle_flow_integration_calls_total{service=\"ms-alert\",status=\"success\"}[5m])) / sum(rate(eagle_flow_integration_calls_total{service=\"ms-alert\"}[5m])) * 100",
+            "legendFormat": "Success Rate",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 90},
+                {"color": "green", "value": 95}
+              ]
+            },
+            "unit": "percent",
+            "decimals": 2
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "ms-customer Success Rate",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 8, "x": 16, "y": 0},
+        "targets": [
+          {
+            "expr": "sum(rate(eagle_flow_integration_calls_total{service=\"ms-customer\",status=\"success\"}[5m])) / sum(rate(eagle_flow_integration_calls_total{service=\"ms-customer\"}[5m])) * 100",
+            "legendFormat": "Success Rate",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 90},
+                {"color": "green", "value": 95}
+              ]
+            },
+            "unit": "percent",
+            "decimals": 2
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "ms-rules Success Rate",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 8, "x": 8, "y": 4},
+        "targets": [
+          {
+            "expr": "sum(rate(eagle_flow_integration_calls_total{service=\"ms-rules\",status=\"success\"}[5m])) / sum(rate(eagle_flow_integration_calls_total{service=\"ms-rules\"}[5m])) * 100",
+            "legendFormat": "Success Rate",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 90},
+                {"color": "green", "value": 95}
+              ]
+            },
+            "unit": "percent",
+            "decimals": 2
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "Total Integration Calls",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 8, "x": 16, "y": 4},
+        "targets": [
+          {
+            "expr": "sum(increase(eagle_flow_integration_calls_total[1h]))",
+            "legendFormat": "Total Calls (1h)",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "unit": "short",
+            "decimals": 0
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "Response Time by Service (p50, p95, p99)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(eagle_flow_integration_duration_seconds_bucket[5m])) by (service, le))",
+            "legendFormat": "{{service}} - p50",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(eagle_flow_integration_duration_seconds_bucket[5m])) by (service, le))",
+            "legendFormat": "{{service}} - p95",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(eagle_flow_integration_duration_seconds_bucket[5m])) by (service, le))",
+            "legendFormat": "{{service}} - p99",
+            "refId": "C"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Response Time (seconds)",
+            "format": "s",
+            "min": 0
+          },
+          {"show": false}
+        ],
+        "xAxis": {
+          "mode": "time"
+        },
+        "legend": {
+          "show": true,
+          "alignAsTable": true,
+          "avg": true,
+          "max": true,
+          "current": true
+        },
+        "thresholds": [
+          {"value": 0.5, "colorMode": "critical", "op": "gt", "line": true, "fill": false}
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Average Response Time by Service",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "targets": [
+          {
+            "expr": "rate(eagle_flow_integration_duration_seconds_sum[5m]) / rate(eagle_flow_integration_duration_seconds_count[5m])",
+            "legendFormat": "{{service}}",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Avg Response Time (seconds)",
+            "format": "s",
+            "min": 0
+          },
+          {"show": false}
+        ],
+        "xAxis": {
+          "mode": "time"
+        },
+        "legend": {
+          "show": true,
+          "alignAsTable": true,
+          "avg": true,
+          "max": true,
+          "current": true
+        }
+      },
+      {
+        "id": 8,
+        "title": "Circuit Breaker State",
+        "type": "stat",
+        "gridPos": {"h": 6, "w": 8, "x": 0, "y": 16},
+        "targets": [
+          {
+            "expr": "eagle_flow_circuit_breaker_state{service=\"ms-alert\"}",
+            "legendFormat": "ms-alert",
+            "refId": "A"
+          },
+          {
+            "expr": "eagle_flow_circuit_breaker_state{service=\"ms-customer\"}",
+            "legendFormat": "ms-customer",
+            "refId": "B"
+          },
+          {
+            "expr": "eagle_flow_circuit_breaker_state{service=\"ms-rules\"}",
+            "legendFormat": "ms-rules",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 1},
+                {"color": "red", "value": 2}
+              ]
+            },
+            "mappings": [
+              {"type": "value", "value": "0", "text": "CLOSED"},
+              {"type": "value", "value": "1", "text": "HALF_OPEN"},
+              {"type": "value", "value": "2", "text": "OPEN"}
+            ],
+            "unit": "short"
+          }
+        },
+        "options": {
+          "colorMode": "background",
+          "graphMode": "none",
+          "textMode": "value_and_name"
+        }
+      },
+      {
+        "id": 9,
+        "title": "Circuit Breaker State Timeline",
+        "type": "graph",
+        "gridPos": {"h": 6, "w": 16, "x": 8, "y": 16},
+        "targets": [
+          {
+            "expr": "eagle_flow_circuit_breaker_state",
+            "legendFormat": "{{service}}",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "State",
+            "min": 0,
+            "max": 2,
+            "decimals": 0
+          },
+          {"show": false}
+        ],
+        "xAxis": {
+          "mode": "time"
+        },
+        "legend": {
+          "show": true
+        },
+        "seriesOverrides": [
+          {
+            "alias": "/.*/",
+            "lines": true,
+            "linewidth": 2,
+            "steppedLine": true
+          }
+        ]
+      },
+      {
+        "id": 10,
+        "title": "Error Rate by Service",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 22},
+        "targets": [
+          {
+            "expr": "sum(rate(eagle_flow_integration_calls_total{status=\"failure\"}[5m])) by (service) / sum(rate(eagle_flow_integration_calls_total[5m])) by (service) * 100",
+            "legendFormat": "{{service}}",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Error Rate (%)",
+            "format": "percent",
+            "min": 0,
+            "max": 100
+          },
+          {"show": false}
+        ],
+        "xAxis": {
+          "mode": "time"
+        },
+        "legend": {
+          "show": true,
+          "alignAsTable": true,
+          "avg": true,
+          "max": true,
+          "current": true
+        },
+        "thresholds": [
+          {"value": 5, "colorMode": "critical", "op": "gt", "line": true, "fill": true, "fillColor": "rgba(255, 0, 0, 0.1)"}
+        ],
+        "alert": {
+          "name": "High Integration Error Rate",
+          "conditions": [
+            {
+              "evaluator": {"params": [5], "type": "gt"},
+              "operator": {"type": "and"},
+              "query": {"params": ["A", "5m", "now"]},
+              "reducer": {"params": [], "type": "avg"},
+              "type": "query"
+            }
+          ],
+          "executionErrorState": "alerting",
+          "frequency": "1m",
+          "handler": 1,
+          "message": "Integration error rate is above 5%",
+          "noDataState": "no_data",
+          "notifications": []
+        }
+      },
+      {
+        "id": 11,
+        "title": "Total Errors by Service",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 22},
+        "targets": [
+          {
+            "expr": "sum(increase(eagle_flow_integration_calls_total{status=\"failure\"}[5m])) by (service)",
+            "legendFormat": "{{service}}",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Error Count",
+            "format": "short",
+            "min": 0
+          },
+          {"show": false}
+        ],
+        "xAxis": {
+          "mode": "time"
+        },
+        "legend": {
+          "show": true,
+          "alignAsTable": true,
+          "total": true,
+          "max": true,
+          "current": true
+        }
+      },
+      {
+        "id": 12,
+        "title": "Retry Attempts by Service",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 30},
+        "targets": [
+          {
+            "expr": "sum(rate(eagle_flow_retry_attempts_total[5m])) by (service)",
+            "legendFormat": "{{service}}",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Retry Attempts/sec",
+            "format": "short",
+            "min": 0
+          },
+          {"show": false}
+        ],
+        "xAxis": {
+          "mode": "time"
+        },
+        "legend": {
+          "show": true,
+          "alignAsTable": true,
+          "avg": true,
+          "max": true,
+          "current": true
+        }
+      },
+      {
+        "id": 13,
+        "title": "Total Retry Attempts (1h)",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 12, "y": 30},
+        "targets": [
+          {
+            "expr": "sum(increase(eagle_flow_retry_attempts_total{service=\"ms-alert\"}[1h]))",
+            "legendFormat": "ms-alert",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "unit": "short",
+            "decimals": 0
+          }
+        },
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "textMode": "value_and_name"
+        }
+      },
+      {
+        "id": 14,
+        "title": "Total Retry Attempts (1h)",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 18, "y": 30},
+        "targets": [
+          {
+            "expr": "sum(increase(eagle_flow_retry_attempts_total{service=\"ms-customer\"}[1h]))",
+            "legendFormat": "ms-customer",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "unit": "short",
+            "decimals": 0
+          }
+        },
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "textMode": "value_and_name"
+        }
+      },
+      {
+        "id": 15,
+        "title": "Total Retry Attempts (1h)",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 12, "y": 34},
+        "targets": [
+          {
+            "expr": "sum(increase(eagle_flow_retry_attempts_total{service=\"ms-rules\"}[1h]))",
+            "legendFormat": "ms-rules",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "unit": "short",
+            "decimals": 0
+          }
+        },
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "textMode": "value_and_name"
+        }
+      },
+      {
+        "id": 16,
+        "title": "Integration Calls Rate",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 38},
+        "targets": [
+          {
+            "expr": "sum(rate(eagle_flow_integration_calls_total[5m])) by (service, status)",
+            "legendFormat": "{{service}} - {{status}}",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Calls/sec",
+            "format": "short",
+            "min": 0
+          },
+          {"show": false}
+        ],
+        "xAxis": {
+          "mode": "time"
+        },
+        "legend": {
+          "show": true,
+          "alignAsTable": true,
+          "avg": true,
+          "max": true,
+          "current": true
+        },
+        "stack": true
+      },
+      {
+        "id": 17,
+        "title": "Success vs Failure Ratio",
+        "type": "piechart",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 38},
+        "targets": [
+          {
+            "expr": "sum(increase(eagle_flow_integration_calls_total{status=\"success\"}[1h]))",
+            "legendFormat": "Success",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(increase(eagle_flow_integration_calls_total{status=\"failure\"}[1h]))",
+            "legendFormat": "Failure",
+            "refId": "B"
+          }
+        ],
+        "options": {
+          "legend": {
+            "displayMode": "table",
+            "placement": "right",
+            "values": ["value", "percent"]
+          },
+          "pieType": "donut"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"}
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "Success"},
+              "properties": [{"id": "color", "value": {"fixedColor": "green", "mode": "fixed"}}]
+            },
+            {
+              "matcher": {"id": "byName", "options": "Failure"},
+              "properties": [{"id": "color", "value": {"fixedColor": "red", "mode": "fixed"}}]
+            }
+          ]
+        }
+      },
+      {
+        "id": 18,
+        "title": "Integration Health Summary",
+        "type": "table",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 46},
+        "targets": [
+          {
+            "expr": "sum(rate(eagle_flow_integration_calls_total{status=\"success\"}[5m])) by (service) / sum(rate(eagle_flow_integration_calls_total[5m])) by (service) * 100",
+            "legendFormat": "{{service}}",
+            "refId": "A",
+            "format": "table",
+            "instant": true
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(eagle_flow_integration_duration_seconds_bucket[5m])) by (service, le))",
+            "legendFormat": "{{service}}",
+            "refId": "B",
+            "format": "table",
+            "instant": true
+          },
+          {
+            "expr": "sum(increase(eagle_flow_integration_calls_total[1h])) by (service)",
+            "legendFormat": "{{service}}",
+            "refId": "C",
+            "format": "table",
+            "instant": true
+          },
+          {
+            "expr": "sum(increase(eagle_flow_retry_attempts_total[1h])) by (service)",
+            "legendFormat": "{{service}}",
+            "refId": "D",
+            "format": "table",
+            "instant": true
+          },
+          {
+            "expr": "eagle_flow_circuit_breaker_state",
+            "legendFormat": "{{service}}",
+            "refId": "E",
+            "format": "table",
+            "instant": true
+          }
+        ],
+        "transformations": [
+          {
+            "id": "merge"
+          },
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {
+                "Time": true,
+                "__name__": true,
+                "instance": true,
+                "job": true
+              },
+              "indexByName": {
+                "service": 0,
+                "Value #A": 1,
+                "Value #B": 2,
+                "Value #C": 3,
+                "Value #D": 4,
+                "Value #E": 5
+              },
+              "renameByName": {
+                "service": "Service",
+                "Value #A": "Success Rate (%)",
+                "Value #B": "P95 Response Time (s)",
+                "Value #C": "Total Calls (1h)",
+                "Value #D": "Retry Attempts (1h)",
+                "Value #E": "Circuit Breaker State"
+              }
+            }
+          }
+        ],
+        "options": {
+          "showHeader": true,
+          "sortBy": [
+            {
+              "displayName": "Success Rate (%)",
+              "desc": false
+            }
+          ]
+        },
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "align": "center",
+              "displayMode": "auto"
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "Success Rate (%)"},
+              "properties": [
+                {
+                  "id": "custom.displayMode",
+                  "value": "color-background"
+                },
+                {
+                  "id": "thresholds",
+                  "value": {
+                    "mode": "absolute",
+                    "steps": [
+                      {"color": "red", "value": 0},
+                      {"color": "yellow", "value": 90},
+                      {"color": "green", "value": 95}
+                    ]
+                  }
+                },
+                {
+                  "id": "unit",
+                  "value": "percent"
+                },
+                {
+                  "id": "decimals",
+                  "value": 2
+                }
+              ]
+            },
+            {
+              "matcher": {"id": "byName", "options": "P95 Response Time (s)"},
+              "properties": [
+                {
+                  "id": "custom.displayMode",
+                  "value": "color-background"
+                },
+                {
+                  "id": "thresholds",
+                  "value": {
+                    "mode": "absolute",
+                    "steps": [
+                      {"color": "green", "value": 0},
+                      {"color": "yellow", "value": 0.3},
+                      {"color": "red", "value": 0.5}
+                    ]
+                  }
+                },
+                {
+                  "id": "unit",
+                  "value": "s"
+                },
+                {
+                  "id": "decimals",
+                  "value": 3
+                }
+              ]
+            },
+            {
+              "matcher": {"id": "byName", "options": "Circuit Breaker State"},
+              "properties": [
+                {
+                  "id": "custom.displayMode",
+                  "value": "color-background"
+                },
+                {
+                  "id": "thresholds",
+                  "value": {
+                    "mode": "absolute",
+                    "steps": [
+                      {"color": "green", "value": 0},
+                      {"color": "yellow", "value": 1},
+                      {"color": "red", "value": 2}
+                    ]
+                  }
+                },
+                {
+                  "id": "mappings",
+                  "value": [
+                    {"type": "value", "value": "0", "text": "CLOSED"},
+                    {"type": "value", "value": "1", "text": "HALF_OPEN"},
+                    {"type": "value", "value": "2", "text": "OPEN"}
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "datasource",
+          "type": "datasource",
+          "query": "prometheus",
+          "current": {
+            "text": "Prometheus",
+            "value": "Prometheus"
+          }
+        },
+        {
+          "name": "service",
+          "type": "query",
+          "datasource": "Prometheus",
+          "query": "label_values(eagle_flow_integration_calls_total, service)",
+          "multi": true,
+          "includeAll": true,
+          "current": {
+            "text": "All",
+            "value": "$__all"
+          }
+        }
+      ]
+    },
+    "annotations": {
+      "list": [
+        {
+          "name": "Deployments",
+          "datasource": "Prometheus",
+          "enable": true,
+          "expr": "changes(eagle_flow_build_info[5m]) > 0",
+          "iconColor": "blue",
+          "tagKeys": "version"
+        },
+        {
+          "name": "Circuit Breaker Opens",
+          "datasource": "Prometheus",
+          "enable": true,
+          "expr": "changes(eagle_flow_circuit_breaker_state{state=\"open\"}[1m]) > 0",
+          "iconColor": "red",
+          "tagKeys": "service"
+        }
+      ]
+    }
+  },
+  "overwrite": true
+}

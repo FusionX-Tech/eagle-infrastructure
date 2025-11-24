@@ -1,0 +1,10 @@
+# Ignore local environment overrides
+.env.local
+
+# Ignore backup files
+*.sql
+*.backup
+
+# Ignore logs
+*.log
+logs/

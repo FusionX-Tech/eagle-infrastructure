@@ -283,6 +283,94 @@ services:
       timeout: 5s
       retries: 5
 
+  # 🐰 RABBITMQ (Message Broker)
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: fx-rabbitmq
+    profiles: ["infra"]
+    restart: unless-stopped
+    ports:
+      - "5672:5672"   # AMQP protocol
+      - "15672:15672" # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: fusionx
+      RABBITMQ_DEFAULT_PASS: fusionx2024
+      RABBITMQ_DEFAULT_VHOST: /
+      RABBITMQ_ERLANG_COOKIE: "eagle-messaging-cluster-secret"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+      - rabbitmq-logs:/var/log/rabbitmq
+      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
+    networks: [fusionx-net]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    labels:
+      - "description=RabbitMQ Message Broker for Eagle Microservices"
+      - "component=messaging"
+      - "prometheus.io/scrape=true"
+      - "prometheus.io/port=15692"
+      - "prometheus.io/path=/metrics"
+
+  # 📦 MINIO (Object Storage - S3 Compatible)
+  minio:
+    image: minio/minio:latest
+    container_name: fx-minio
+    profiles: ["infra"]
+    restart: unless-stopped
+    ports:
+      - "9000:9000"   # MinIO API
+      - "9001:9001"   # MinIO Console
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_BROWSER_REDIRECT_URL: http://localhost:9001
+      MINIO_PROMETHEUS_AUTH_TYPE: public
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-data:/data
+      - ./minio/init:/docker-entrypoint-initdb.d:ro
+    networks: [fusionx-net]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    labels:
+      - "description=MinIO Object Storage for Eagle Attachments"
+      - "component=storage"
+      - "prometheus.io/scrape=true"
+      - "prometheus.io/port=9000"
+      - "prometheus.io/path=/minio/v2/metrics/cluster"
+
+  # MinIO Client (mc) - For initialization
+  minio-init:
+    image: minio/mc:latest
+    container_name: fx-minio-init
+    profiles: ["infra"]
+    depends_on:
+      minio: { condition: service_healthy }
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set myminio http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin};
+      mc mb --ignore-existing myminio/eagle-alerts;
+      mc mb --ignore-existing myminio/eagle-attachments;
+      mc mb --ignore-existing myminio/eagle-reports;
+      mc anonymous set download myminio/eagle-alerts;
+      mc anonymous set download myminio/eagle-attachments;
+      mc anonymous set download myminio/eagle-reports;
+      mc admin user add myminio eagle-service eagle-service-password;
+      mc admin policy attach myminio readwrite --user eagle-service;
+      echo 'MinIO buckets created successfully';
+      exit 0;
+      "
+    networks: [fusionx-net]
+
   # 🟢 API GATEWAY - KONG
   kong:
     image: kong:3.8
@@ -443,6 +531,9 @@ volumes:
   vault-logs:
   redis-master-data:
   redis-replica-data:
+  rabbitmq-data:
+  rabbitmq-logs:
+  minio-data:
   kong-logs:
   kong-db-data:
   prometheus-data:

@@ -1,0 +1,628 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "approval-workflow",
+    "title": "Approval Workflow - Monitoring Dashboard",
+    "tags": ["eagle", "approval-workflow", "rules"],
+    "style": "dark",
+    "timezone": "browser",
+    "refresh": "30s",
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Workflow Status Overview",
+        "type": "stat",
+        "gridPos": {"h": 6, "w": 6, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "approval_workflow_pending_gauge",
+            "legendFormat": "Pending",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 50},
+                {"color": "orange", "value": 80},
+                {"color": "red", "value": 100}
+              ]
+            },
+            "unit": "short",
+            "mappings": []
+          }
+        },
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": ""
+          },
+          "textMode": "value_and_name"
+        }
+      },
+      {
+        "id": 2,
+        "title": "Workflows Created (Last 24h)",
+        "type": "stat",
+        "gridPos": {"h": 6, "w": 6, "x": 6, "y": 0},
+        "targets": [
+          {
+            "expr": "sum(increase(approval_workflow_created_total[24h]))",
+            "legendFormat": "Created",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "unit": "short"
+          }
+        },
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "textMode": "value_and_name"
+        }
+      },
+      {
+        "id": 3,
+        "title": "Workflows Approved (Last 24h)",
+        "type": "stat",
+        "gridPos": {"h": 6, "w": 6, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "sum(increase(approval_workflow_approved_total[24h]))",
+            "legendFormat": "Approved",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "fixed", "fixedColor": "green"},
+            "unit": "short"
+          }
+        },
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "textMode": "value_and_name"
+        }
+      },
+      {
+        "id": 4,
+        "title": "Workflows Rejected (Last 24h)",
+        "type": "stat",
+        "gridPos": {"h": 6, "w": 6, "x": 18, "y": 0},
+        "targets": [
+          {
+            "expr": "sum(increase(approval_workflow_rejected_total[24h]))",
+            "legendFormat": "Rejected",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "fixed", "fixedColor": "red"},
+            "unit": "short"
+          }
+        },
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "textMode": "value_and_name"
+        }
+      },
+      {
+        "id": 5,
+        "title": "Workflow Creation Rate",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6},
+        "targets": [
+          {
+            "expr": "sum(rate(approval_workflow_created_total[5m])) by (type)",
+            "legendFormat": "{{type}}",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {"label": "Workflows/sec", "min": 0},
+          {"show": false}
+        ],
+        "legend": {
+          "show": true,
+          "alignAsTable": true,
+          "avg": true,
+          "current": true,
+          "max": true,
+          "min": true
+        }
+      },
+      {
+        "id": 6,
+        "title": "Approval vs Rejection Rate",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6},
+        "targets": [
+          {
+            "expr": "sum(rate(approval_workflow_approved_total[5m]))",
+            "legendFormat": "Approved",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(rate(approval_workflow_rejected_total[5m]))",
+            "legendFormat": "Rejected",
+            "refId": "B"
+          },
+          {
+            "expr": "sum(rate(approval_workflow_cancelled_total[5m]))",
+            "legendFormat": "Cancelled",
+            "refId": "C"
+          }
+        ],
+        "yAxes": [
+          {"label": "Workflows/sec", "min": 0},
+          {"show": false}
+        ],
+        "legend": {
+          "show": true,
+          "alignAsTable": true,
+          "avg": true,
+          "current": true
+        }
+      },
+      {
+        "id": 7,
+        "title": "Average Approval Time",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 14},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(approval_workflow_duration_seconds_bucket[5m])) by (le))",
+            "legendFormat": "p50 (median)",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(approval_workflow_duration_seconds_bucket[5m])) by (le))",
+            "legendFormat": "p95",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(approval_workflow_duration_seconds_bucket[5m])) by (le))",
+            "legendFormat": "p99",
+            "refId": "C"
+          }
+        ],
+        "yAxes": [
+          {"label": "Seconds", "min": 0, "format": "s"},
+          {"show": false}
+        ],
+        "legend": {
+          "show": true,
+          "alignAsTable": true,
+          "avg": true,
+          "current": true
+        },
+        "thresholds": [
+          {"value": 86400, "colorMode": "critical", "op": "gt", "line": true, "fill": false}
+        ]
+      },
+      {
+        "id": 8,
+        "title": "Rejection Rate (%)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 14},
+        "targets": [
+          {
+            "expr": "(sum(rate(approval_workflow_rejected_total[5m])) / sum(rate(approval_workflow_created_total[5m]))) * 100",
+            "legendFormat": "Rejection Rate",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {"label": "Percentage", "min": 0, "max": 100},
+          {"show": false}
+        ],
+        "thresholds": [
+          {"value": 50, "colorMode": "critical", "op": "gt", "line": true, "fill": true}
+        ],
+        "alert": {
+          "name": "High Rejection Rate",
+          "conditions": [
+            {
+              "evaluator": {"params": [50], "type": "gt"},
+              "operator": {"type": "and"},
+              "query": {"params": ["A", "5m", "now"]},
+              "reducer": {"params": [], "type": "avg"},
+              "type": "query"
+            }
+          ]
+        }
+      },
+      {
+        "id": 9,
+        "title": "Email Service Status",
+        "type": "stat",
+        "gridPos": {"h": 6, "w": 6, "x": 0, "y": 22},
+        "targets": [
+          {
+            "expr": "up{job=\"ms-rules\",health_component=\"emailService\"}",
+            "legendFormat": "Email Service",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "green", "value": 1}
+              ]
+            },
+            "mappings": [
+              {"type": "value", "value": "0", "text": "DOWN"},
+              {"type": "value", "value": "1", "text": "UP"}
+            ]
+          }
+        },
+        "options": {
+          "colorMode": "background",
+          "textMode": "value"
+        }
+      },
+      {
+        "id": 10,
+        "title": "Emails Sent (Last 24h)",
+        "type": "stat",
+        "gridPos": {"h": 6, "w": 6, "x": 6, "y": 22},
+        "targets": [
+          {
+            "expr": "sum(increase(approval_email_sent_total[24h]))",
+            "legendFormat": "Sent",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "unit": "short"
+          }
+        },
+        "options": {
+          "colorMode": "value",
+          "textMode": "value_and_name"
+        }
+      },
+      {
+        "id": 11,
+        "title": "Email Failures (Last 24h)",
+        "type": "stat",
+        "gridPos": {"h": 6, "w": 6, "x": 12, "y": 22},
+        "targets": [
+          {
+            "expr": "sum(increase(approval_email_failed_total[24h]))",
+            "legendFormat": "Failed",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 10},
+                {"color": "red", "value": 50}
+              ]
+            },
+            "unit": "short"
+          }
+        },
+        "options": {
+          "colorMode": "background",
+          "textMode": "value_and_name"
+        }
+      },
+      {
+        "id": 12,
+        "title": "Email Send Rate",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 28},
+        "targets": [
+          {
+            "expr": "sum(rate(approval_email_sent_total[5m])) by (type)",
+            "legendFormat": "{{type}}",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {"label": "Emails/sec", "min": 0},
+          {"show": false}
+        ],
+        "legend": {
+          "show": true,
+          "alignAsTable": true,
+          "avg": true,
+          "current": true
+        }
+      },
+      {
+        "id": 13,
+        "title": "Email Failure Rate (%)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 28},
+        "targets": [
+          {
+            "expr": "(sum(rate(approval_email_failed_total[5m])) / sum(rate(approval_email_sent_total[5m]))) * 100",
+            "legendFormat": "Failure Rate",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {"label": "Percentage", "min": 0, "max": 100},
+          {"show": false}
+        ],
+        "thresholds": [
+          {"value": 5, "colorMode": "critical", "op": "gt", "line": true, "fill": true}
+        ]
+      },
+      {
+        "id": 14,
+        "title": "Token Generation Rate",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 36},
+        "targets": [
+          {
+            "expr": "sum(rate(approval_token_generated_total[5m]))",
+            "legendFormat": "Generated",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(rate(approval_token_validated_total[5m]))",
+            "legendFormat": "Validated",
+            "refId": "B"
+          }
+        ],
+        "yAxes": [
+          {"label": "Tokens/sec", "min": 0},
+          {"show": false}
+        ],
+        "legend": {
+          "show": true,
+          "alignAsTable": true,
+          "avg": true,
+          "current": true
+        }
+      },
+      {
+        "id": 15,
+        "title": "Token Expiration Rate",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 36},
+        "targets": [
+          {
+            "expr": "sum(rate(approval_token_expired_total[1h]))",
+            "legendFormat": "Expired",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {"label": "Tokens/hour", "min": 0},
+          {"show": false}
+        ],
+        "thresholds": [
+          {"value": 10, "colorMode": "critical", "op": "gt", "line": true, "fill": true}
+        ]
+      },
+      {
+        "id": 16,
+        "title": "Invalid Token Attempts",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 44},
+        "targets": [
+          {
+            "expr": "sum(rate(approval_token_invalid_total[5m]))",
+            "legendFormat": "Invalid Tokens",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {"label": "Attempts/sec", "min": 0},
+          {"show": false}
+        ],
+        "thresholds": [
+          {"value": 5, "colorMode": "critical", "op": "gt", "line": true, "fill": true}
+        ],
+        "alert": {
+          "name": "High Invalid Token Rate",
+          "conditions": [
+            {
+              "evaluator": {"params": [5], "type": "gt"},
+              "operator": {"type": "and"},
+              "query": {"params": ["A", "5m", "now"]},
+              "reducer": {"params": [], "type": "avg"},
+              "type": "query"
+            }
+          ]
+        }
+      },
+      {
+        "id": 17,
+        "title": "Approval Errors",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 44},
+        "targets": [
+          {
+            "expr": "sum(rate(approval_duplicate_attempt_total[5m]))",
+            "legendFormat": "Duplicate Attempts",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(rate(approval_self_approval_attempt_total[5m]))",
+            "legendFormat": "Self-Approval Attempts",
+            "refId": "B"
+          },
+          {
+            "expr": "sum(rate(approval_inactive_approver_attempt_total[5m]))",
+            "legendFormat": "Inactive Approver Attempts",
+            "refId": "C"
+          }
+        ],
+        "yAxes": [
+          {"label": "Errors/sec", "min": 0},
+          {"show": false}
+        ],
+        "legend": {
+          "show": true,
+          "alignAsTable": true,
+          "avg": true,
+          "current": true
+        }
+      },
+      {
+        "id": 18,
+        "title": "Workflow Distribution by Type",
+        "type": "piechart",
+        "gridPos": {"h": 8, "w": 8, "x": 0, "y": 52},
+        "targets": [
+          {
+            "expr": "sum(approval_workflow_created_total) by (type)",
+            "legendFormat": "{{type}}",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "legend": {
+            "displayMode": "table",
+            "placement": "right",
+            "values": ["value", "percent"]
+          },
+          "pieType": "pie",
+          "displayLabels": ["name", "percent"]
+        }
+      },
+      {
+        "id": 19,
+        "title": "Approval Rate by Type (%)",
+        "type": "bargauge",
+        "gridPos": {"h": 8, "w": 8, "x": 8, "y": 52},
+        "targets": [
+          {
+            "expr": "(sum(approval_workflow_approved_total) by (type) / sum(approval_workflow_created_total) by (type)) * 100",
+            "legendFormat": "{{type}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 50},
+                {"color": "green", "value": 80}
+              ]
+            },
+            "unit": "percent",
+            "min": 0,
+            "max": 100
+          }
+        },
+        "options": {
+          "orientation": "horizontal",
+          "displayMode": "gradient",
+          "showUnfilled": true
+        }
+      },
+      {
+        "id": 20,
+        "title": "Active Alerts",
+        "type": "table",
+        "gridPos": {"h": 8, "w": 8, "x": 16, "y": 52},
+        "targets": [
+          {
+            "expr": "ALERTS{component=\"approval-workflow\",alertstate=\"firing\"}",
+            "format": "table",
+            "instant": true,
+            "refId": "A"
+          }
+        ],
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {
+                "Time": true,
+                "Value": true
+              },
+              "indexByName": {
+                "alertname": 0,
+                "severity": 1,
+                "description": 2
+              }
+            }
+          }
+        ],
+        "options": {
+          "showHeader": true,
+          "sortBy": [
+            {
+              "displayName": "severity",
+              "desc": false
+            }
+          ]
+        }
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "datasource",
+          "type": "datasource",
+          "query": "prometheus",
+          "current": {
+            "text": "Prometheus",
+            "value": "Prometheus"
+          }
+        },
+        {
+          "name": "workflow_type",
+          "type": "query",
+          "query": "label_values(approval_workflow_created_total, type)",
+          "current": {
+            "text": "All",
+            "value": "$__all"
+          },
+          "includeAll": true,
+          "multi": true
+        }
+      ]
+    },
+    "annotations": {
+      "list": [
+        {
+          "datasource": "Prometheus",
+          "enable": true,
+          "expr": "ALERTS{component=\"approval-workflow\",alertstate=\"firing\"}",
+          "iconColor": "red",
+          "name": "Approval Workflow Alerts",
+          "tagKeys": "alertname,severity",
+          "textFormat": "{{alertname}}: {{description}}",
+          "titleFormat": "Alert"
+        }
+      ]
+    }
+  }
+}

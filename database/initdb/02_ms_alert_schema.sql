@@ -1,8 +1,25 @@
 \connect ms_alert;
 
+-- Grant permissions to alert_user
+GRANT ALL ON SCHEMA public TO alert_user;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO alert_user;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO alert_user;
+GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO alert_user;
+
+-- Set default privileges for future objects
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO alert_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO alert_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO alert_user;
+
 -- 1) Schema e search_path (somente para esta sessão)
 CREATE SCHEMA IF NOT EXISTS ms_alert AUTHORIZATION CURRENT_USER;
 SET search_path TO ms_alert, public;
+
+-- Grant permissions on ms_alert schema
+GRANT ALL ON SCHEMA ms_alert TO alert_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA ms_alert GRANT ALL ON TABLES TO alert_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA ms_alert GRANT ALL ON SEQUENCES TO alert_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA ms_alert GRANT ALL ON FUNCTIONS TO alert_user;
 
 -- 2) Extensão UUID neste DB
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -121,12 +138,12 @@ EXECUTE FUNCTION ms_alert.set_updated_at();
 
 -- Função para refresh de estatísticas (otimização de performance)
 CREATE OR REPLACE FUNCTION ms_alert.refresh_alert_statistics()
-RETURNS void AS $
+RETURNS void AS $$
 BEGIN
     ANALYZE ms_alert.alerts_partitioned;
     RAISE NOTICE 'Alert statistics refreshed at %', NOW();
 END;
-$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql;
 
 -- Comentários para documentação
 COMMENT ON TABLE ms_alert.alerts_partitioned IS 'Main table for storing alert information with partitioning support';
@@ -136,6 +153,15 @@ COMMENT ON COLUMN ms_alert.alerts_partitioned.scope_end_date IS 'End date for al
 COMMENT ON COLUMN ms_alert.alerts_partitioned.status IS 'Current status of the alert processing';
 COMMENT ON COLUMN ms_alert.alerts_partitioned.process_id IS 'External process identifier for tracking';
 COMMENT ON COLUMN ms_alert.alerts_partitioned.enrichment_data IS 'JSON data with enrichment information';
+
+-- Ensure alert_user has access to all created objects
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA ms_alert TO alert_user;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA ms_alert TO alert_user;
+GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA ms_alert TO alert_user;
+
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO alert_user;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO alert_user;
+GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO alert_user;
 
 -- Coleta inicial de estatísticas
 ANALYZE ms_alert.alerts_partitioned;

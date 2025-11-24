@@ -38,6 +38,18 @@ scrape_configs:
     scrape_interval: 10s
     metrics_path: /actuator/prometheus
 
+  # Eagle Flow (local Docker development)
+  - job_name: 'ms-eagle-flow'
+    static_configs:
+      - targets: ['fx-ms-eagle-flow:8092']
+    scrape_interval: 15s
+    metrics_path: /actuator/prometheus
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+      - target_label: service
+        replacement: 'ms-eagle-flow'
+
   - job_name: 'ms-alert'
     kubernetes_sd_configs:
       - role: endpoints

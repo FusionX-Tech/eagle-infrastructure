@@ -1,4 +1,26 @@
 -- 00_create_databases.sql
+
+-- Create application users first
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'eagle_user') THEN
+        CREATE USER eagle_user WITH PASSWORD 'eagle_pass';
+    END IF;
+    
+    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'customer_user') THEN
+        CREATE USER customer_user WITH PASSWORD 'customer_pass';
+    END IF;
+    
+    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'alert_user') THEN
+        CREATE USER alert_user WITH PASSWORD 'alert_pass';
+    END IF;
+    
+    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'api_user') THEN
+        CREATE USER api_user WITH PASSWORD 'api_pass';
+    END IF;
+END $$;
+
+-- Create databases
 SELECT 'CREATE DATABASE ms_customer'
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname='ms_customer')\gexec
 
@@ -37,3 +59,27 @@ WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'keycloak')\gexec
 
 SELECT 'CREATE DATABASE ms_orchestrator'
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'ms_orchestrator')\gexec
+
+SELECT 'CREATE DATABASE ms_qa'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'ms_qa')\gexec
+
+SELECT 'CREATE DATABASE ms_qa_test'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'ms_qa_test')\gexec
+
+-- Grant permissions to users on their respective databases
+GRANT ALL PRIVILEGES ON DATABASE ms_transaction TO eagle_user;
+GRANT ALL PRIVILEGES ON DATABASE ms_customer TO customer_user;
+GRANT ALL PRIVILEGES ON DATABASE ms_alert TO alert_user;
+GRANT ALL PRIVILEGES ON DATABASE ms_api TO api_user;
+-- Cr
+eate QA user
+DO $ 
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'qa_user') THEN
+        CREATE USER qa_user WITH PASSWORD 'qa_pass';
+    END IF;
+END $;
+
+-- Grant permissions for QA databases
+GRANT ALL PRIVILEGES ON DATABASE ms_qa TO qa_user;
+GRANT ALL PRIVILEGES ON DATABASE ms_qa_test TO qa_user;

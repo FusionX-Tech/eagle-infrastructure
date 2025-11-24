@@ -1,8 +1,25 @@
 \connect ms_customer;
 
+-- Grant permissions to customer_user
+GRANT ALL ON SCHEMA public TO customer_user;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO customer_user;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO customer_user;
+GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO customer_user;
+
+-- Set default privileges for future objects
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO customer_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO customer_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO customer_user;
+
 -- 1) Schema e search_path desta sessão
 CREATE SCHEMA IF NOT EXISTS ms_customer AUTHORIZATION CURRENT_USER;
 SET search_path TO ms_customer, public;
+
+-- Grant permissions on ms_customer schema
+GRANT ALL ON SCHEMA ms_customer TO customer_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA ms_customer GRANT ALL ON TABLES TO customer_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA ms_customer GRANT ALL ON SEQUENCES TO customer_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA ms_customer GRANT ALL ON FUNCTIONS TO customer_user;
 
 -- 2) Extensões necessárias neste DB
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -226,6 +243,15 @@ COMMENT ON TABLE ms_customer.contacts IS 'Contatos dos clientes (email, telefone
 COMMENT ON TABLE ms_customer.amlrisk IS 'Avaliação de risco AML (Anti-Money Laundering) dos clientes';
 COMMENT ON TABLE ms_customer.relationships IS 'Relacionamentos entre clientes';
 COMMENT ON TABLE ms_customer.company IS 'Empresas/grupos empresariais';
+
+-- Ensure customer_user has access to all created objects
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA ms_customer TO customer_user;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA ms_customer TO customer_user;
+GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA ms_customer TO customer_user;
+
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO customer_user;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO customer_user;
+GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO customer_user;
 
 -- Log de sucesso
 SELECT 'MS-Customer database schema created successfully with optimized indexes and constraints!' as status;

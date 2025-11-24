@@ -1,6 +1,17 @@
 -- 04_ms_api_schema.sql
 \c ms_api;
 
+-- Grant permissions to api_user
+GRANT ALL ON SCHEMA public TO api_user;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO api_user;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO api_user;
+GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO api_user;
+
+-- Set default privileges for future objects
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO api_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO api_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO api_user;
+
 -- Create external_data_cache table
 CREATE TABLE IF NOT EXISTS external_data_cache (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -140,6 +151,11 @@ BEGIN
     RETURN cached_data;
 END;
 $$ LANGUAGE plpgsql;
+
+-- Ensure api_user has access to all created objects
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO api_user;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO api_user;
+GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO api_user;
 
 COMMENT ON TABLE external_data_cache IS 'Cache for external API responses to improve performance and reduce API calls';
 COMMENT ON TABLE api_request_log IS 'Log of all external API requests for monitoring and analytics';

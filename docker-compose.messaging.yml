@@ -1,0 +1,61 @@
+name: fusionx-eagle-messaging
+
+# FusionX Eagle Messaging Infrastructure
+# RabbitMQ Message Broker for Event-Driven Architecture
+#
+# Usage:
+# docker-compose -f docker-compose.messaging.yml --profile messaging up -d
+#
+# Management UI: http://localhost:15672 (user: fusionx, pass: fusionx2024)
+# AMQP Port: 5672
+
+services:
+  # 🐰 RABBITMQ (Message Broker)
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: fx-rabbitmq
+    profiles: ["messaging"]
+    restart: unless-stopped
+    ports:
+      - "5672:5672"   # AMQP protocol
+      - "15672:15672" # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: fusionx
+      RABBITMQ_DEFAULT_PASS: fusionx2024
+      RABBITMQ_DEFAULT_VHOST: /
+      # Clustering (for future horizontal scaling)
+      RABBITMQ_ERLANG_COOKIE: "eagle-messaging-cluster-secret"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+      - rabbitmq-logs:/var/log/rabbitmq
+      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
+    networks:
+      - fusionx-net
+      - messaging-net
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    labels:
+      - "description=RabbitMQ Message Broker for Eagle Microservices"
+      - "component=messaging"
+      # Prometheus monitoring
+      - "prometheus.io/scrape=true"
+      - "prometheus.io/port=15692"
+      - "prometheus.io/path=/metrics"
+
+networks:
+  fusionx-net:
+    external: true
+  messaging-net:
+    driver: bridge
+    name: eagle-messaging-net
+
+volumes:
+  rabbitmq-data:
+    name: fx-rabbitmq-data
+  rabbitmq-logs:
+    name: fx-rabbitmq-logs

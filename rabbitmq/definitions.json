@@ -1,0 +1,194 @@
+{
+  "rabbit_version": "3.13.0",
+  "rabbitmq_version": "3.13.0",
+  "vhosts": [
+    {
+      "name": "/"
+    }
+  ],
+  "exchanges": [
+    {
+      "name": "eagle.events",
+      "vhost": "/",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "eagle.dlx",
+      "vhost": "/",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {},
+      "description": "Dead Letter Exchange for failed messages"
+    }
+  ],
+  "queues": [
+    {
+      "name": "alert.events",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 86400000,
+        "x-dead-letter-exchange": "eagle.dlx",
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "customer.events",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 86400000,
+        "x-dead-letter-exchange": "eagle.dlx",
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "transaction.events",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 86400000,
+        "x-dead-letter-exchange": "eagle.dlx",
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "rules.events",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 86400000,
+        "x-dead-letter-exchange": "eagle.dlx",
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "analytics.all",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 604800000,
+        "x-dead-letter-exchange": "eagle.dlx",
+        "x-queue-type": "quorum"
+      },
+      "description": "Centralized queue for ms-analytics - receives ALL events from all domains"
+    },
+    {
+      "name": "orchestrator.events",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 604800000,
+        "x-dead-letter-exchange": "eagle.dlx",
+        "x-queue-type": "quorum"
+      },
+      "description": "Queue for ms-orchestrator - receives events for workflow orchestration"
+    },
+    {
+      "name": "orchestrator.events.dlq",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {},
+      "description": "Dead Letter Queue for orchestrator events"
+    },
+    {
+      "name": "eagle.dlq",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {},
+      "description": "Dead Letter Queue for manual inspection of failed messages"
+    }
+  ],
+  "bindings": [
+    {
+      "source": "eagle.events",
+      "vhost": "/",
+      "destination": "alert.events",
+      "destination_type": "queue",
+      "routing_key": "alert.*",
+      "arguments": {}
+    },
+    {
+      "source": "eagle.events",
+      "vhost": "/",
+      "destination": "customer.events",
+      "destination_type": "queue",
+      "routing_key": "customer.*",
+      "arguments": {}
+    },
+    {
+      "source": "eagle.events",
+      "vhost": "/",
+      "destination": "transaction.events",
+      "destination_type": "queue",
+      "routing_key": "transaction.*",
+      "arguments": {}
+    },
+    {
+      "source": "eagle.events",
+      "vhost": "/",
+      "destination": "rules.events",
+      "destination_type": "queue",
+      "routing_key": "rules.*",
+      "arguments": {}
+    },
+    {
+      "source": "eagle.events",
+      "vhost": "/",
+      "destination": "analytics.all",
+      "destination_type": "queue",
+      "routing_key": "#",
+      "arguments": {},
+      "description": "Analytics receives ALL events (# = wildcard for all topics)"
+    },
+    {
+      "source": "eagle.events",
+      "vhost": "/",
+      "destination": "orchestrator.events",
+      "destination_type": "queue",
+      "routing_key": "alert.*",
+      "arguments": {},
+      "description": "Orchestrator receives alert events"
+    },
+    {
+      "source": "eagle.events",
+      "vhost": "/",
+      "destination": "orchestrator.events",
+      "destination_type": "queue",
+      "routing_key": "customer.*",
+      "arguments": {},
+      "description": "Orchestrator receives customer events"
+    },
+    {
+      "source": "eagle.events",
+      "vhost": "/",
+      "destination": "orchestrator.events",
+      "destination_type": "queue",
+      "routing_key": "dossier.*",
+      "arguments": {},
+      "description": "Orchestrator receives dossier events"
+    },
+    {
+      "source": "eagle.dlx",
+      "vhost": "/",
+      "destination": "eagle.dlq",
+      "destination_type": "queue",
+      "routing_key": "#",
+      "arguments": {}
+    }
+  ]
+}
