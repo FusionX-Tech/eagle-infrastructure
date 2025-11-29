@@ -119,32 +119,36 @@
       "vhost": "/",
       "destination": "alert.events",
       "destination_type": "queue",
-      "routing_key": "alert.*",
-      "arguments": {}
+      "routing_key": "alert.#",
+      "arguments": {},
+      "description": "Alert receives all alert.* events (# = wildcard for hierarchical topics)"
     },
     {
       "source": "eagle.events",
       "vhost": "/",
       "destination": "customer.events",
       "destination_type": "queue",
-      "routing_key": "customer.*",
-      "arguments": {}
+      "routing_key": "customer.#",
+      "arguments": {},
+      "description": "Customer receives all customer.* events (# = wildcard for hierarchical topics)"
     },
     {
       "source": "eagle.events",
       "vhost": "/",
       "destination": "transaction.events",
       "destination_type": "queue",
-      "routing_key": "transaction.*",
-      "arguments": {}
+      "routing_key": "transaction.#",
+      "arguments": {},
+      "description": "Transaction receives all transaction.* events (# = wildcard for hierarchical topics)"
     },
     {
       "source": "eagle.events",
       "vhost": "/",
       "destination": "rules.events",
       "destination_type": "queue",
-      "routing_key": "rules.*",
-      "arguments": {}
+      "routing_key": "rules.#",
+      "arguments": {},
+      "description": "Rules receives all rules.* events (# = wildcard for hierarchical topics)"
     },
     {
       "source": "eagle.events",
@@ -160,27 +164,27 @@
       "vhost": "/",
       "destination": "orchestrator.events",
       "destination_type": "queue",
-      "routing_key": "alert.*",
+      "routing_key": "alert.#",
       "arguments": {},
-      "description": "Orchestrator receives alert events"
+      "description": "Orchestrator receives all alert.* events"
     },
     {
       "source": "eagle.events",
       "vhost": "/",
       "destination": "orchestrator.events",
       "destination_type": "queue",
-      "routing_key": "customer.*",
+      "routing_key": "customer.#",
       "arguments": {},
-      "description": "Orchestrator receives customer events"
+      "description": "Orchestrator receives all customer.* events"
     },
     {
       "source": "eagle.events",
       "vhost": "/",
       "destination": "orchestrator.events",
       "destination_type": "queue",
-      "routing_key": "dossier.*",
+      "routing_key": "dossier.#",
       "arguments": {},
-      "description": "Orchestrator receives dossier events"
+      "description": "Orchestrator receives all dossier.* events"
     },
     {
       "source": "eagle.dlx",
