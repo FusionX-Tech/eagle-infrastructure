@@ -1,9 +1,26 @@
 {
   "rabbit_version": "3.13.0",
   "rabbitmq_version": "3.13.0",
+  "users": [
+    {
+      "name": "fusionx",
+      "password_hash": "C2JHvm22/YIZ9ltBHUD+nKLmwiei/J/OJYINApnZzV4xIUWs",
+      "hashing_algorithm": "rabbit_password_hashing_sha256",
+      "tags": ["administrator"]
+    }
+  ],
   "vhosts": [
     {
       "name": "/"
+    }
+  ],
+  "permissions": [
+    {
+      "user": "fusionx",
+      "vhost": "/",
+      "configure": ".*",
+      "write": ".*",
+      "read": ".*"
     }
   ],
   "exchanges": [
@@ -111,6 +128,126 @@
       "auto_delete": false,
       "arguments": {},
       "description": "Dead Letter Queue for manual inspection of failed messages"
+    },
+    {
+      "name": "alert.enrichment",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 86400000,
+        "x-dead-letter-exchange": "eagle.dlx",
+        "x-queue-type": "quorum"
+      },
+      "description": "Queue for ms-alert-go to receive enrichment data from other services"
+    },
+    {
+      "name": "customer.alert.enrichment",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 86400000,
+        "x-dead-letter-exchange": "eagle.dlx",
+        "x-queue-type": "quorum"
+      },
+      "description": "Queue for ms-customer-go to consume alert.created events and enrich with customer data"
+    },
+    {
+      "name": "transaction.alert.enrichment",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 86400000,
+        "x-dead-letter-exchange": "eagle.dlx",
+        "x-queue-type": "quorum"
+      },
+      "description": "Queue for ms-transaction-go to consume alert.created events and enrich with transaction data"
+    },
+    {
+      "name": "external.alert.enrichment",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 86400000,
+        "x-dead-letter-exchange": "eagle.dlx",
+        "x-queue-type": "quorum"
+      },
+      "description": "Queue for ms-external-api to consume alert.created events and enrich with external data (CEIS, CNEP, etc.)"
+    },
+    {
+      "name": "transaction.batch.created",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 86400000,
+        "x-dead-letter-exchange": "eagle.dlx",
+        "x-queue-type": "quorum"
+      },
+      "description": "Queue for processing transaction batches"
+    },
+    {
+      "name": "transaction.file.uploaded",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 86400000,
+        "x-dead-letter-exchange": "eagle.dlx",
+        "x-queue-type": "quorum"
+      },
+      "description": "Queue for processing uploaded transaction files"
+    },
+    {
+      "name": "customer.batch.created",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 86400000,
+        "x-dead-letter-exchange": "eagle.dlx",
+        "x-queue-type": "quorum"
+      },
+      "description": "Queue for processing customer batches"
+    },
+    {
+      "name": "customer.file.uploaded",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 86400000,
+        "x-dead-letter-exchange": "eagle.dlx",
+        "x-queue-type": "quorum"
+      },
+      "description": "Queue for processing uploaded customer files"
+    },
+    {
+      "name": "audit.events",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 604800000,
+        "x-dead-letter-exchange": "eagle.dlx",
+        "x-queue-type": "quorum"
+      },
+      "description": "Centralized queue for ms-audit-go - receives ALL events for auditing"
+    },
+    {
+      "name": "orchestrator.file.processed",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 604800000,
+        "x-dead-letter-exchange": "eagle.dlx",
+        "x-queue-type": "quorum"
+      },
+      "description": "Queue for ms-orchestrator to consume file.processed events and archive files"
     }
   ],
   "bindings": [
@@ -193,6 +330,105 @@
       "destination_type": "queue",
       "routing_key": "#",
       "arguments": {}
+    },
+    {
+      "source": "eagle.events",
+      "vhost": "/",
+      "destination": "alert.enrichment",
+      "destination_type": "queue",
+      "routing_key": "alert.enrichment",
+      "arguments": {},
+      "description": "Alert enrichment data from other services"
+    },
+    {
+      "source": "eagle.events",
+      "vhost": "/",
+      "destination": "customer.alert.enrichment",
+      "destination_type": "queue",
+      "routing_key": "alert.created",
+      "arguments": {},
+      "description": "Customer service consumes alert.created to enrich with customer data"
+    },
+    {
+      "source": "eagle.events",
+      "vhost": "/",
+      "destination": "transaction.alert.enrichment",
+      "destination_type": "queue",
+      "routing_key": "alert.created",
+      "arguments": {},
+      "description": "Transaction service consumes alert.created to enrich with transaction data"
+    },
+    {
+      "source": "eagle.events",
+      "vhost": "/",
+      "destination": "external.alert.enrichment",
+      "destination_type": "queue",
+      "routing_key": "alert.created",
+      "arguments": {},
+      "description": "External API service consumes alert.created to enrich with external data"
+    },
+    {
+      "source": "eagle.events",
+      "vhost": "/",
+      "destination": "transaction.batch.created",
+      "destination_type": "queue",
+      "routing_key": "transaction.batch.created",
+      "arguments": {},
+      "description": "Transaction batch processing"
+    },
+    {
+      "source": "eagle.events",
+      "vhost": "/",
+      "destination": "transaction.file.uploaded",
+      "destination_type": "queue",
+      "routing_key": "transaction.file.uploaded",
+      "arguments": {},
+      "description": "Transaction file processing"
+    },
+    {
+      "source": "eagle.events",
+      "vhost": "/",
+      "destination": "customer.batch.created",
+      "destination_type": "queue",
+      "routing_key": "customer.batch.created",
+      "arguments": {},
+      "description": "Customer batch processing"
+    },
+    {
+      "source": "eagle.events",
+      "vhost": "/",
+      "destination": "customer.file.uploaded",
+      "destination_type": "queue",
+      "routing_key": "customer.file.uploaded",
+      "arguments": {},
+      "description": "Customer file processing"
+    },
+    {
+      "source": "eagle.events",
+      "vhost": "/",
+      "destination": "audit.events",
+      "destination_type": "queue",
+      "routing_key": "#",
+      "arguments": {},
+      "description": "Audit receives ALL events"
+    },
+    {
+      "source": "eagle.events",
+      "vhost": "/",
+      "destination": "orchestrator.file.processed",
+      "destination_type": "queue",
+      "routing_key": "transaction.file.processed",
+      "arguments": {},
+      "description": "Orchestrator archives transaction files after processing"
+    },
+    {
+      "source": "eagle.events",
+      "vhost": "/",
+      "destination": "orchestrator.file.processed",
+      "destination_type": "queue",
+      "routing_key": "customer.file.processed",
+      "arguments": {},
+      "description": "Orchestrator archives customer files after processing"
     }
   ]
 }
